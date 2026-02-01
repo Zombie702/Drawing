@@ -99,6 +99,10 @@
             padding-bottom: env(safe-area-inset-bottom);
         }
         
+        .pt-safe {
+            padding-top: env(safe-area-inset-top);
+        }
+        
         /* Glassmorphism Classes */
         .glass {
             background: rgba(30, 41, 59, 0.7);
@@ -257,7 +261,7 @@
 
     <!-- Upload Progress Banner -->
     <transition name="fade">
-        <div v-if="isUploadingStory" class="fixed top-0 left-0 w-full z-[9999] bg-gradient-to-r from-indigo-600 to-purple-600 shadow-xl flex items-center justify-between px-4 py-3 pb-safe-top">
+        <div v-if="isUploadingStory" class="fixed top-0 left-0 w-full z-[9999] bg-gradient-to-r from-indigo-600 to-purple-600 shadow-xl flex items-center justify-between px-4 pt-safe pb-3">
             <div class="flex items-center gap-3">
                 <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 <span class="font-bold text-sm text-white">جاري رفع القصة...</span>
@@ -316,525 +320,611 @@
     <!-- Main App Content -->
     <template v-else-if="user">
         
-        <!-- --- HOME PAGE (Feed) --- -->
-        <div v-if="currentView === 'home' || currentView === 'timeline'" class="flex-1 overflow-y-auto p-4 pb-24 custom-scroll relative z-10">
-            <!-- Header -->
-            <header class="flex justify-between items-center mb-6 px-2">
-                <div class="flex items-center gap-2" @click="viewMyStories">
-                    <!-- My Profile Ring with Story Indicator -->
-                    <div class="w-10 h-10 rounded-full flex items-center justify-center p-[2px] cursor-pointer" :class="getMyStoryStatusClass()">
-                        <div class="w-full h-full rounded-full bg-[#1e293b] flex items-center justify-center overflow-hidden border-2 border-[#0f172a]">
-                             <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover">
-                             <span v-else>{{ userData.name?.charAt(0) }}</span>
-                        </div>
-                    </div>
-                    <h1 class="text-2xl font-black text-white">Universal <i class="fas fa-bolt text-yellow-400"></i></h1>
-                </div>
-                
-                <div class="flex items-center gap-3">
-                     <!-- Timeline/Feed Toggle -->
-                     <button @click="currentView = currentView === 'timeline' ? 'home' : 'timeline'" class="w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/10 transition border border-white/10 relative">
-                        <i class="fas" :class="currentView === 'timeline' ? 'fa-home' : 'fa-calendar-alt'"></i>
-                    </button>
-                </div>
-            </header>
-
-            <!-- Stories / Friends Strip -->
-            <div class="mb-6">
-                 <div class="flex gap-4 overflow-x-auto pb-2 scrollbar-hide px-2">
-                    <!-- My Story (Add) -->
-                    <div class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group" @click="viewMyStories">
-                        <!-- My Story Avatar & Ring -->
-                        <div class="relative w-16 h-16 rounded-full p-[2px]" :class="getMyStoryStatusClass()">
-                             <div class="w-full h-full rounded-full glass border-2 border-dashed border-indigo-400 flex items-center justify-center text-indigo-400 relative overflow-hidden">
-                                 <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover opacity-80">
-                                 <div v-else class="w-full h-full flex items-center justify-center font-bold">{{ userData.name?.charAt(0) }}</div>
-                             </div>
-                             <!-- Small Plus Button: Show ONLY if NO active story -->
-                             <div v-if="!hasActiveStory" class="absolute bottom-0 right-0 bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center border-2 border-[#0f172a] text-white text-[10px] z-20">
-                                <i class="fas fa-plus"></i>
-                             </div>
-                        </div>
-                        <span class="text-xs font-bold text-indigo-300">قصتي</span>
-                        <input type="file" ref="storyInput" @change="handleStoryUpload" accept="image/*,video/*" class="hidden">
-                    </div>
-
-                    <!-- Friend Stories -->
-                    <div v-for="u in onlineUsers" :key="u.id" class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group">
-                        <!-- Friend Avatar with Online Dot Fix & Story Ring -->
-                        <div class="relative w-16 h-16 rounded-full p-[2px]" :class="getStoryRingClass(u.id)" @click="viewFriendStory(u)">
-                             <div class="w-full h-full rounded-full bg-black overflow-hidden relative border-2 border-[#0f172a]">
-                                <img v-if="u.photoURL" :src="u.photoURL" class="w-full h-full object-cover">
-                                <span v-else class="w-full h-full flex items-center justify-center font-bold text-lg">{{ u.name.charAt(0) }}</span>
-                             </div>
-                             <!-- Fixed Online Dot (Outside overflow-hidden) -->
-                             <div class="absolute bottom-1 right-0 w-3 h-3 rounded-full border-2 border-[#0f172a] z-10" 
-                                  :class="isUserOnline(u) ? 'bg-green-500' : 'bg-gray-500'"></div>
-                        </div>
-                        <span class="text-xs text-gray-300 truncate w-full text-center">{{ u.name }}</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Social Feed View (Targeted: Only Received Messages) -->
-            <div v-if="currentView === 'home'" class="space-y-6">
-                 <div v-if="homeFeedPosts.length === 0" class="glass p-10 rounded-3xl text-center border border-white/5 mx-2">
-                    <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                        <i class="fas fa-inbox text-3xl text-gray-500"></i>
-                    </div>
-                    <h3 class="font-bold text-lg text-white mb-2">صندوق الذكريات فارغ</h3>
-                    <p class="text-sm text-gray-400">ستظهر هنا الذكريات التي يرسلها لك الأصدقاء.</p>
-                    <button @click="triggerCamera" class="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-full font-bold text-sm">إرسال لصديق</button>
-                 </div>
-
-                 <!-- Post Card -->
-                 <div v-for="post in homeFeedPosts" :key="post.id" class="glass rounded-3xl overflow-hidden border border-white/5 shadow-xl mx-2">
-                    <!-- Post Header -->
-                    <div class="p-4 flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="relative w-10 h-10">
-                                <div class="w-full h-full rounded-full bg-indigo-500/20 flex items-center justify-center overflow-hidden border border-white/10">
-                                    <img v-if="post.userPhoto" :src="post.userPhoto" class="w-full h-full object-cover">
-                                    <span v-else class="text-indigo-300 font-bold">{{ post.senderName.charAt(0) }}</span>
-                                </div>
-                            </div>
-                            <div>
-                                <h4 class="font-bold text-sm text-white">{{ post.senderName }}</h4>
-                                <span class="text-[10px] text-gray-400">{{ formatDateHeader(post.timestamp) }}</span>
-                            </div>
-                        </div>
-                        <button class="text-gray-400 hover:text-white"><i class="fas fa-ellipsis-h"></i></button>
-                    </div>
-
-                    <!-- Post Image -->
-                    <div class="w-full bg-black/40 relative">
-                        <img :src="post.imageUrl" class="w-full h-auto object-contain max-h-[500px]" loading="lazy" @click="viewImage(post.imageUrl, post.senderName)">
-                    </div>
-
-                    <!-- Post Actions -->
-                    <div class="p-4">
-                        <div class="flex items-center gap-4 mb-3">
-                            <button @click="toggleLike(post)" class="text-2xl transition transform active:scale-90" :class="post.isLiked ? 'text-red-500' : 'text-white hover:text-gray-300'">
-                                <i :class="post.isLiked ? 'fas fa-heart' : 'far fa-heart'"></i>
-                            </button>
-                            <button class="text-2xl text-white hover:text-gray-300"><i class="far fa-comment"></i></button>
-                            <button class="text-2xl text-white hover:text-gray-300 ml-auto"><i class="far fa-bookmark"></i></button>
-                        </div>
-                        
-                        <p class="text-sm font-bold text-white mb-2" v-if="post.likes && post.likes.length > 0">{{ post.likes.length }} إعجاب</p>
-                        
-                        <!-- Caption/Comments -->
-                        <div class="space-y-1 mb-3">
-                            <div v-for="(comment, idx) in (post.comments || []).slice(-3)" :key="idx" class="text-sm">
-                                <span class="font-bold text-white ml-2">{{ comment.userName }}</span>
-                                <span class="text-gray-300">{{ comment.text }}</span>
-                            </div>
-                        </div>
-
-                        <!-- Add Comment -->
-                        <form @submit.prevent="addComment(post)" class="flex items-center gap-3 mt-2">
-                             <div class="w-6 h-6 rounded-full bg-gray-700 overflow-hidden flex-shrink-0">
-                                 <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover">
-                                 <div v-else class="w-full h-full bg-indigo-500"></div>
-                             </div>
-                             <input v-model="post.newComment" type="text" placeholder="أضف تعليقاً..." class="flex-1 bg-transparent text-sm text-white focus:outline-none placeholder-gray-500">
-                             <button type="submit" :disabled="!post.newComment" class="text-indigo-400 font-bold text-sm disabled:opacity-50">نشر</button>
-                        </form>
-                    </div>
-                 </div>
-            </div>
-
-            <!-- Timeline View (Side-by-Side) -->
-            <div v-if="currentView === 'timeline'" class="animate-fade pb-24">
-                <h2 class="text-center text-xl font-bold mb-6 text-white">الجدول الزمني المشترك</h2>
-                
-                <div v-for="group in timelineGroups" :key="group.date" class="mb-8">
-                    <h3 class="sticky top-0 bg-[#0f172a]/90 backdrop-blur z-20 py-2 px-4 text-sm font-bold text-gray-400 mb-4 border-b border-white/5 w-full flex items-center justify-between">
-                        <span><i class="far fa-calendar-alt ml-2"></i> {{ formatDateHeader(group.date) }}</span>
-                        <span class="text-xs font-normal bg-white/10 px-2 py-1 rounded-full">{{ group.pairs.length }} ثنائي</span>
-                    </h3>
-                    
-                    <div v-for="(pair, idx) in group.pairs" :key="idx" class="mb-8 px-2">
-                        <div class="flex items-center justify-center gap-2 mb-3">
-                             <span class="text-sm font-bold text-white">أنا</span>
-                             <i class="fas fa-exchange-alt text-gray-500 text-xs"></i>
-                             <span class="text-sm font-bold text-white">{{ pair.partner.name }}</span>
-                        </div>
-                        
-                        <div class="flex gap-3 h-56">
-                            <!-- My Post (Right side in RTL) -->
-                            <div class="flex-1 rounded-2xl overflow-hidden bg-white/5 border border-white/10 relative group">
-                                <template v-if="pair.me">
-                                    <img :src="pair.me.imageUrl" class="w-full h-full object-cover transition duration-500 group-hover:scale-110" @click="viewImage(pair.me.imageUrl, 'أنا')">
-                                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
-                                    <div class="absolute bottom-2 right-2 text-xs font-bold text-white"><i class="fas fa-user-circle"></i> أنا</div>
-                                    <div class="absolute bottom-2 left-2 text-xs text-gray-300"><i class="fas fa-heart text-red-500"></i> {{ pair.me.likes?.length || 0 }}</div>
-                                </template>
-                                <div v-else class="w-full h-full flex items-center justify-center text-gray-500 text-xs flex-col gap-2 bg-black/20">
-                                    <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center"><i class="fas fa-ghost text-xl opacity-50"></i></div>
-                                    <span>لم ترسل</span>
-                                </div>
-                            </div>
-                            
-                            <!-- Their Post (Left side in RTL) -->
-                            <div class="flex-1 rounded-2xl overflow-hidden bg-white/5 border border-white/10 relative group">
-                                <template v-if="pair.them">
-                                    <img :src="pair.them.imageUrl" class="w-full h-full object-cover transition duration-500 group-hover:scale-110" @click="viewImage(pair.them.imageUrl, pair.partner.name)">
-                                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
-                                    <div class="absolute bottom-2 right-2 text-xs font-bold text-white"><i class="fas fa-user"></i> {{ pair.partner.name }}</div>
-                                    <div class="absolute bottom-2 left-2 text-xs text-gray-300"><i class="fas fa-heart text-red-500"></i> {{ pair.them.likes?.length || 0 }}</div>
-                                </template>
-                                <div v-else class="w-full h-full flex items-center justify-center text-gray-500 text-xs flex-col gap-2 bg-black/20">
-                                    <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center"><i class="fas fa-hourglass-half text-xl opacity-50"></i></div>
-                                    <span>لم يرسل</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div v-if="timelineGroups.length === 0" class="text-center py-20 text-gray-500">
-                    <i class="fas fa-history text-4xl mb-3 opacity-30"></i>
-                    <p>لا توجد ذكريات مشتركة في التقويم</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- --- CANVAS PAGE --- -->
-        <div v-show="currentView === 'canvas'" class="flex-1 flex flex-col h-full relative z-10">
-            <!-- Canvas Header -->
-            <div class="absolute top-0 left-0 w-full p-4 flex justify-between items-start z-[50] pointer-events-none">
-                 <!-- Mode Switcher (Removed Image Button) -->
-                <div class="pointer-events-auto bg-black/60 backdrop-blur-md rounded-2xl p-1 flex gap-1 border border-white/10 shadow-lg">
-                    <button @click="switchMode('draw')" :class="{'bg-indigo-600 text-white shadow': mode === 'draw', 'text-gray-400 hover:text-white': mode !== 'draw'}" class="px-4 py-2 rounded-xl text-sm font-bold transition">رسم</button>
-                    <button @click="switchMode('color')" :class="{'bg-indigo-600 text-white shadow': mode === 'color', 'text-gray-400 hover:text-white': mode !== 'color'}" class="px-4 py-2 rounded-xl text-sm font-bold transition">تلوين</button>
-                    <!-- Image mode is now only accessible via bottom nav camera button -->
-                </div>
-
-                <!-- Session Status -->
-                <button @click="openPairingModal" class="pointer-events-auto w-10 h-10 rounded-full glass flex items-center justify-center shadow-lg border border-white/10" :class="pairing.isPaired ? 'text-green-400 paired-pulse border-green-500/30' : 'text-gray-400'">
-                    <i class="fas" :class="pairing.isPaired ? 'fa-link' : 'fa-unlink'"></i>
-                </button>
-            </div>
-
-            <!-- Magic Wand Button -->
-            <button v-if="mode === 'color'" @click="showMagicModal = true" class="absolute top-20 left-4 z-[45] pointer-events-auto glass w-12 h-12 rounded-full flex items-center justify-center text-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.3)] hover:scale-110 transition border border-yellow-500/20">
-                <i class="fas fa-magic text-xl"></i>
-            </button>
+        <!-- App Scaffold: Wrapper for Authenticated Views -->
+        <div class="absolute inset-0 w-full h-full flex flex-col overflow-hidden bg-[#0f172a]">
             
-            <!-- Trash Button for Generated Image -->
-            <button v-if="mode === 'color' && coloringBaseImage" @click="deleteGeneratedImage" class="absolute top-20 left-20 z-[45] pointer-events-auto glass w-12 h-12 rounded-full flex items-center justify-center text-red-400 shadow-lg hover:bg-red-500/20 transition border border-red-500/20">
-                <i class="fas fa-trash-alt"></i>
-            </button>
-
-            <!-- Main Canvas Area -->
-            <div :class="isFullscreen ? 'fixed inset-0 z-[100] bg-[#0f172a]' : 'flex-1 relative w-full overflow-hidden'" ref="drawingContainer">
-                <!-- Controls -->
-                <div v-if="mode === 'draw' || mode === 'color'" class="absolute top-20 right-4 z-[45] flex flex-col gap-2 pointer-events-auto" :class="{'top-4': isFullscreen}">
-                    <button @click="toggleFullscreen" class="glass w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition"><i class="fas" :class="isFullscreen ? 'fa-compress' : 'fa-expand'"></i></button>
-                    <button @click="resetView" class="glass w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition"><i class="fas fa-compress-arrows-alt"></i></button>
-                    
-                    <div class="h-px w-full bg-white/10 my-1"></div>
-                    
-                    <button @click="undo" :disabled="localActionIds.length === 0" class="glass w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition disabled:opacity-30"><i class="fas fa-undo"></i></button>
-                    <button @click="redo" :disabled="redoStack.length === 0" class="glass w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition disabled:opacity-30"><i class="fas fa-redo"></i></button>
-                    
-                    <div class="h-px w-full bg-white/10 my-1"></div>
-                    
-                    <button @click="showConfirm('مسح اللوحة', 'هل أنت متأكد من مسح الرسم بالكامل؟', 'fas fa-trash-alt', clearCanvas)" class="glass w-10 h-10 rounded-full flex items-center justify-center text-red-400 hover:bg-red-500/20 transition"><i class="fas fa-trash"></i></button>
-                </div>
-
-                <!-- Canvas Element -->
-                <div v-show="mode === 'draw' || mode === 'color'" class="canvas-container">
-                    <div :style="{ transform: 'translate(' + panX + 'px, ' + panY + 'px) scale(' + zoomLevel + ')' }" class="w-full h-full flex items-center justify-center origin-center will-change-transform">
-                        <canvas ref="canvas" width="1080" height="1920"
-                                @mousedown="handleStart" @mousemove="handleMove" @mouseup="handleEnd" 
-                                @touchstart="handleStart" @touchmove="handleMove" @touchend="handleEnd" 
-                                class="main-canvas block"></canvas>
-                    </div>
-                </div>
-
-                <!-- Image Upload Mode -->
-                <div v-show="mode === 'image'" class="w-full h-full flex flex-col items-center justify-center relative p-4">
-                    <img v-if="uploadedImage" :src="uploadedImage" class="absolute inset-0 w-full h-full object-contain p-4 z-10">
-                    <button v-if="uploadedImage" @click.stop="removeImage" class="absolute top-20 right-4 z-50 bg-red-600 text-white rounded-full w-10 h-10 shadow-lg flex items-center justify-center"><i class="fas fa-times"></i></button>
-                    <div v-if="!uploadedImage" class="text-center p-10 border-2 border-dashed border-white/20 rounded-3xl glass w-full max-w-sm flex flex-col items-center">
-                        <i class="fas fa-cloud-upload-alt text-4xl text-indigo-400 mb-4"></i>
-                        <p class="font-bold text-gray-300">اضغط لاختيار صورة</p>
-                    </div>
-                    <input v-if="!uploadedImage" type="file" @change="handleImageUpload" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" ref="imageUploadInput">
-                    <button v-if="uploadedImage" @click="openFriendSelector" class="absolute bottom-24 bg-indigo-600 text-white px-8 py-3 rounded-xl shadow-xl font-bold z-50 flex items-center gap-2 hover:bg-indigo-700 transition"><span>إرسال الصورة</span> <i class="fas fa-paper-plane"></i></button>
-                </div>
-
-                <!-- AI Loading Overlay -->
-                <div v-if="isGeneratingAI" class="absolute inset-0 z-[100] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center">
-                    <div class="relative">
-                         <div class="w-20 h-20 border-4 border-indigo-500 rounded-full animate-ping absolute top-0 left-0 opacity-20"></div>
-                         <i class="fas fa-magic text-4xl text-indigo-400 animate-pulse"></i>
-                    </div>
-                    <p class="font-bold text-white mt-8 text-lg">جاري التوليد بالذكاء الاصطناعي...</p>
-                </div>
-            </div>
-
-            <!-- Tools Toolbar Container with Toggle -->
-            <div v-if="mode !== 'image' && !isWaitingForAccept" 
-                 class="absolute bottom-[90px] left-1/2 transform -translate-x-1/2 z-[150] w-[95%] max-w-[400px] transition-transform duration-300 ease-in-out"
-                 :class="{ 'translate-y-[120%]': isToolsCollapsed }">
+            <!-- Main View Container -->
+            <main class="flex-1 w-full relative overflow-hidden z-10">
                 
-                <!-- Toggle Arrow Button -->
-                 <button @click="isToolsCollapsed = !isToolsCollapsed" 
-                         class="absolute -top-10 left-1/2 -translate-x-1/2 w-12 h-8 rounded-t-xl glass-heavy flex items-center justify-center border-t border-x border-white/10 text-gray-400 hover:text-white transition shadow-lg">
-                    <i class="fas transition-transform duration-300" :class="isToolsCollapsed ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-                </button>
-
-                <div class="glass-heavy rounded-2xl p-2 flex items-center justify-between shadow-2xl border border-white/10">
-                    
-                    <!-- Main Tools (Unified for Draw & Color) -->
-                    <div class="flex gap-2 items-center">
-                        <button @click="activatePen" :class="!isBucket && !isEraser ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/50' : 'text-gray-400 hover:bg-white/10'" class="w-10 h-10 rounded-xl flex items-center justify-center transition"><i class="fas fa-pen"></i></button>
-                        <button @click="activateBucket" :class="isBucket ? 'bg-pink-500 text-white shadow-lg shadow-pink-500/50' : 'text-gray-400 hover:bg-white/10'" class="w-10 h-10 rounded-xl flex items-center justify-center transition"><i class="fas fa-fill-drip"></i></button>
-                        <button @click="activateEraser" :class="isEraser ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400 hover:bg-white/10'" class="w-10 h-10 rounded-xl flex items-center justify-center transition"><i class="fas fa-eraser"></i></button>
+                <!-- --- HOME PAGE (Feed) --- -->
+                <div v-if="currentView === 'home' || currentView === 'timeline'" class="w-full h-full overflow-y-auto p-4 pb-24 custom-scroll">
+                    <!-- Header -->
+                    <header class="flex justify-between items-center mb-6 px-2">
+                        <div class="flex items-center gap-2" @click="viewMyStories">
+                            <!-- My Profile Ring with Story Indicator -->
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center p-[2px] cursor-pointer" :class="getMyStoryStatusClass()">
+                                <div class="w-full h-full rounded-full bg-[#1e293b] flex items-center justify-center overflow-hidden border-2 border-[#0f172a]">
+                                     <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover">
+                                     <span v-else>{{ userData.name?.charAt(0) }}</span>
+                                </div>
+                            </div>
+                            <h1 class="text-2xl font-black text-white">Universal <i class="fas fa-bolt text-yellow-400"></i></h1>
+                        </div>
                         
-                        <!-- Brush Size -->
-                         <div class="relative">
-                            <button @click.stop="toggleBrushPopup" class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
-                                <div class="rounded-full bg-white" :style="{ width: Math.min(brushSize, 16) + 'px', height: Math.min(brushSize, 16) + 'px' }"></div>
+                        <div class="flex items-center gap-3">
+                             <!-- Timeline/Feed Toggle -->
+                             <button @click="currentView = currentView === 'timeline' ? 'home' : 'timeline'" class="w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/10 transition border border-white/10 relative">
+                                <i class="fas" :class="currentView === 'timeline' ? 'fa-home' : 'fa-calendar-alt'"></i>
                             </button>
-                            <div v-if="showBrushPopup" class="absolute bottom-full left-0 mb-3 glass p-3 rounded-xl w-48 flex items-center gap-2" @click.stop>
-                                <input type="range" v-model="brushSize" min="1" max="40" class="flex-1">
-                                <span class="text-xs font-bold w-6">{{ brushSize }}</span>
+                        </div>
+                    </header>
+
+                    <!-- Stories / Friends Strip -->
+                    <div class="mb-6">
+                         <div class="flex gap-4 overflow-x-auto pb-2 scrollbar-hide px-2">
+                            <!-- My Story (Add) -->
+                            <div class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group" @click="viewMyStories">
+                                <!-- My Story Avatar & Ring -->
+                                <div class="relative w-16 h-16 rounded-full p-[2px]" :class="getMyStoryStatusClass()">
+                                     <div class="w-full h-full rounded-full glass border-2 border-dashed border-indigo-400 flex items-center justify-center text-indigo-400 relative overflow-hidden">
+                                         <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover opacity-80">
+                                         <div v-else class="w-full h-full flex items-center justify-center font-bold">{{ userData.name?.charAt(0) }}</div>
+                                     </div>
+                                     <!-- Small Plus Button: Show ONLY if NO active story -->
+                                     <div v-if="!hasActiveStory" class="absolute bottom-0 right-0 bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center border-2 border-[#0f172a] text-white text-[10px] z-20">
+                                        <i class="fas fa-plus"></i>
+                                     </div>
+                                </div>
+                                <span class="text-xs font-bold text-indigo-300">قصتي</span>
+                                <input type="file" ref="storyInput" @change="handleStoryUpload" accept="image/*,video/*" class="hidden">
+                            </div>
+
+                            <!-- Friend Stories -->
+                            <div v-for="u in onlineUsers" :key="u.id" class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group">
+                                <!-- Friend Avatar with Online Dot Fix & Story Ring -->
+                                <div class="relative w-16 h-16 rounded-full p-[2px]" :class="getStoryRingClass(u.id)" @click="viewFriendStory(u)">
+                                     <div class="w-full h-full rounded-full bg-black overflow-hidden relative border-2 border-[#0f172a]">
+                                        <img v-if="u.photoURL" :src="u.photoURL" class="w-full h-full object-cover">
+                                        <span v-else class="w-full h-full flex items-center justify-center font-bold text-lg">{{ u.name.charAt(0) }}</span>
+                                     </div>
+                                     <!-- Fixed Online Dot (Outside overflow-hidden) -->
+                                     <div class="absolute bottom-1 right-0 w-3 h-3 rounded-full border-2 border-[#0f172a] z-10" 
+                                          :class="isUserOnline(u) ? 'bg-green-500' : 'bg-gray-500'"></div>
+                                </div>
+                                <span class="text-xs text-gray-300 truncate w-full text-center">{{ u.name }}</span>
                             </div>
                         </div>
                     </div>
 
-                    <div class="w-px h-8 bg-white/10 mx-1"></div>
+                    <!-- Social Feed View -->
+                    <div v-if="currentView === 'home'" class="space-y-6">
+                         <div v-if="homeFeedPosts.length === 0" class="glass p-10 rounded-3xl text-center border border-white/5 mx-2">
+                            <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                                <i class="fas fa-inbox text-3xl text-gray-500"></i>
+                            </div>
+                            <h3 class="font-bold text-lg text-white mb-2">صندوق الذكريات فارغ</h3>
+                            <p class="text-sm text-gray-400">ستظهر هنا الذكريات التي يرسلها لك الأصدقاء.</p>
+                            <button @click="triggerCamera" class="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-full font-bold text-sm">إرسال لصديق</button>
+                         </div>
 
-                    <!-- Colors (Custom Picker Only) -->
-                    <div class="flex gap-2 items-center px-1">
-                         <div @click="openColorPicker" class="w-10 h-10 rounded-full rainbow-btn shrink-0 cursor-pointer flex items-center justify-center shadow-lg"><i class="fas fa-palette text-sm text-white drop-shadow-md"></i></div>
-                         <div class="w-8 h-8 rounded-full border-2 border-white shadow-inner transition" :style="{ backgroundColor: brushColor }"></div>
+                         <!-- Post Card -->
+                         <div v-for="post in homeFeedPosts" :key="post.id" class="glass rounded-3xl overflow-hidden border border-white/5 shadow-xl mx-2">
+                            <!-- Post Header -->
+                            <div class="p-4 flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="relative w-10 h-10">
+                                        <div class="w-full h-full rounded-full bg-indigo-500/20 flex items-center justify-center overflow-hidden border border-white/10">
+                                            <img v-if="post.userPhoto" :src="post.userPhoto" class="w-full h-full object-cover">
+                                            <span v-else class="text-indigo-300 font-bold">{{ post.senderName.charAt(0) }}</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-sm text-white">{{ post.senderName }}</h4>
+                                        <span class="text-[10px] text-gray-400">{{ formatDateHeader(post.timestamp) }}</span>
+                                    </div>
+                                </div>
+                                <button class="text-gray-400 hover:text-white"><i class="fas fa-ellipsis-h"></i></button>
+                            </div>
+
+                            <!-- Post Image -->
+                            <div class="w-full bg-black/40 relative">
+                                <img :src="post.imageUrl" class="w-full h-auto object-contain max-h-[500px]" loading="lazy" @click="viewImage(post.imageUrl, post.senderName)">
+                            </div>
+
+                            <!-- Post Actions -->
+                            <div class="p-4">
+                                <div class="flex items-center gap-4 mb-3">
+                                    <button @click="toggleLike(post)" class="text-2xl transition transform active:scale-90" :class="post.isLiked ? 'text-red-500' : 'text-white hover:text-gray-300'">
+                                        <i :class="post.isLiked ? 'fas fa-heart' : 'far fa-heart'"></i>
+                                    </button>
+                                    <button class="text-2xl text-white hover:text-gray-300"><i class="far fa-comment"></i></button>
+                                    <button class="text-2xl text-white hover:text-gray-300 ml-auto"><i class="far fa-bookmark"></i></button>
+                                </div>
+                                
+                                <p class="text-sm font-bold text-white mb-2" v-if="post.likes && post.likes.length > 0">{{ post.likes.length }} إعجاب</p>
+                                
+                                <!-- Caption/Comments -->
+                                <div class="space-y-1 mb-3">
+                                    <div v-for="(comment, idx) in (post.comments || []).slice(-3)" :key="idx" class="text-sm">
+                                        <span class="font-bold text-white ml-2">{{ comment.userName }}</span>
+                                        <span class="text-gray-300">{{ comment.text }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Add Comment -->
+                                <form @submit.prevent="addComment(post)" class="flex items-center gap-3 mt-2">
+                                     <div class="w-6 h-6 rounded-full bg-gray-700 overflow-hidden flex-shrink-0">
+                                         <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover">
+                                         <div v-else class="w-full h-full bg-indigo-500"></div>
+                                     </div>
+                                     <input v-model="post.newComment" type="text" placeholder="أضف تعليقاً..." class="flex-1 bg-transparent text-sm text-white focus:outline-none placeholder-gray-500">
+                                     <button type="submit" :disabled="!post.newComment" class="text-indigo-400 font-bold text-sm disabled:opacity-50">نشر</button>
+                                </form>
+                            </div>
+                         </div>
                     </div>
 
-                    <!-- Send Action -->
-                    <button @click="openFriendSelector" class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition ml-2 shrink-0">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- --- MODALS --- -->
-
-        <!-- Story Viewer Modal -->
-        <div v-if="showStoryViewer" class="fixed inset-0 z-[7000] bg-black flex flex-col">
-            <!-- Progress Bar -->
-            <div class="absolute top-0 left-0 w-full z-20 flex gap-1 p-2">
-                <div v-for="(story, index) in currentStories" :key="story.id" class="flex-1 story-progress-bar">
-                    <div class="story-progress-fill" :style="{ width: index < currentStoryIndex ? '100%' : (index === currentStoryIndex ? storyProgress + '%' : '0%') }"></div>
-                </div>
-            </div>
-
-            <!-- Header -->
-            <div class="absolute top-4 left-0 w-full z-20 flex justify-between items-center px-4 mt-2">
-                <div class="flex items-center gap-2">
-                    <button v-if="currentStories[currentStoryIndex]?.userId === user.uid" @click="deleteCurrentStory" class="text-red-400 hover:text-red-600 mr-2"><i class="fas fa-trash"></i></button>
-                    
-                    <div class="w-8 h-8 rounded-full overflow-hidden border border-white">
-                        <img v-if="activeStoryUser.photoURL" :src="activeStoryUser.photoURL" class="w-full h-full object-cover">
-                         <span v-else class="w-full h-full bg-gray-500 flex items-center justify-center font-bold text-xs">{{ activeStoryUser.name?.charAt(0) }}</span>
-                    </div>
-                    <span class="font-bold text-sm text-shadow">{{ activeStoryUser.name }}</span>
-                    <span class="text-xs opacity-70">{{ getStoryTimeAgo(currentStories[currentStoryIndex]?.timestamp) }}</span>
-                </div>
-                <div class="flex gap-4">
-                     <button @click="closeStoryViewer" class="text-white"><i class="fas fa-times text-xl"></i></button>
-                </div>
-            </div>
-
-            <!-- Content -->
-            <div class="flex-1 flex items-center justify-center relative" @click="nextStory" @touchstart="pauseStory" @touchend="resumeStory">
-                <div v-if="loadingStory" class="absolute z-10 text-white"><i class="fas fa-spinner fa-spin text-3xl"></i></div>
-                <img v-if="currentStories[currentStoryIndex]?.type === 'image'" :src="currentStories[currentStoryIndex].url" class="max-w-full max-h-full object-contain">
-                <video v-if="currentStories[currentStoryIndex]?.type === 'video'" :src="currentStories[currentStoryIndex].url" autoplay playsinline class="max-w-full max-h-full object-contain" @ended="nextStory" ref="storyVideo"></video>
-                
-                <!-- Navigation Zones -->
-                <div class="absolute inset-y-0 left-0 w-1/4 z-10" @click.stop="prevStory"></div>
-            </div>
-        </div>
-
-        <!-- Magic Wand Modal (AI Generation) -->
-        <div v-if="showMagicModal" class="fixed inset-0 z-[5500] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-             <div class="glass w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-slide-up border border-white/10 relative">
-                 <button @click="showMagicModal = false" class="absolute top-4 left-4 text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
-                 
-                 <div class="text-center mb-6">
-                     <div class="w-16 h-16 rounded-full bg-yellow-400/20 text-yellow-400 flex items-center justify-center mx-auto mb-4 text-3xl shadow-[0_0_20px_rgba(250,204,21,0.3)]">
-                         <i class="fas fa-magic"></i>
-                     </div>
-                     <h3 class="font-bold text-xl text-white">الرسام السحري</h3>
-                     <p class="text-sm text-gray-400 mt-2">اكتب وصفاً للرسمة التي تريد تلوينها</p>
-                 </div>
-                 
-                 <textarea v-model="coloringPrompt" rows="3" placeholder="مثلاً: أميرة في قلعة، سيارة سباق، ديناصور صغير..." class="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none transition mb-4 resize-none"></textarea>
-                 
-                 <button @click="generateColoringPage(); showMagicModal = false" :disabled="isGenerating || !coloringPrompt.trim()" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-indigo-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                     <span v-if="isGenerating"><i class="fas fa-spinner fa-spin"></i> جاري التوليد...</span>
-                     <span v-else>ابدا السحر! <i class="fas fa-magic"></i></span>
-                 </button>
-             </div>
-        </div>
-
-        <!-- Color Picker Modal -->
-        <div v-if="showColorPicker" class="fixed inset-0 z-[5300] bg-black/60 backdrop-blur-md flex items-center justify-center p-4" @click.self="showColorPicker = false">
-            <div class="glass w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-slide-up border border-white/10">
-                <h3 class="font-bold text-lg mb-4 text-center">اختر لوناً</h3>
-                <div class="color-picker-sv mb-4 border border-white/20" :style="{ backgroundColor: `hsl(${picker.h}, 100%, 50%)` }" @mousedown="startPickerDrag" @mousemove="movePicker" @mouseup="endPicker" @touchstart.prevent="startPickerDrag" @touchmove.prevent="movePicker" @touchend="endPicker" ref="pickerArea">
-                    <div class="sv-white"></div><div class="sv-black"></div><div class="picker-cursor" :style="{ left: picker.s + '%', top: (100 - picker.v) + '%' }"></div>
-                </div>
-                <div class="mb-6"><input type="range" v-model.number="picker.h" min="0" max="360" class="w-full h-3 rounded-full appearance-none cursor-pointer" style="background: linear-gradient(to right, red, yellow, lime, cyan, blue, magenta, red);"></div>
-                <div class="flex items-center justify-between gap-4">
-                    <div class="w-12 h-12 rounded-full border-2 border-white/20 shadow-inner" :style="{ backgroundColor: tempColor }"></div>
-                    <button @click="selectPickerColor" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-600/30">تأكيد</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Friend Selection Modal -->
-        <div v-if="showFriendModal" class="fixed inset-0 z-[5400] bg-black/70 backdrop-blur-md flex items-end sm:items-center justify-center">
-            <div class="glass-heavy w-full sm:w-11/12 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-slide-up max-h-[80vh] flex flex-col border border-white/10">
-                <div class="flex justify-between items-center mb-6"><h3 class="font-bold text-lg">إرسال الرسمة إلى...</h3><button @click="showFriendModal=false" class="text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
-                <div class="grid grid-cols-1 gap-3 overflow-y-auto p-1 custom-scroll">
-                    <div v-for="friend in onlineUsers" :key="friend.id" @click="onFriendSelected(friend)" class="flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-indigo-500 cursor-pointer transition group">
-                        <div class="w-12 h-12 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-lg group-hover:bg-indigo-500 group-hover:text-white transition overflow-hidden">
-                             <img v-if="friend.photoURL" :src="friend.photoURL" class="w-full h-full object-cover">
-                             <span v-else>{{ friend.name.charAt(0) }}</span>
+                    <!-- Timeline View -->
+                    <div v-if="currentView === 'timeline'" class="animate-fade pb-24">
+                        <h2 class="text-center text-xl font-bold mb-6 text-white">الجدول الزمني المشترك</h2>
+                        
+                        <div v-for="group in timelineGroups" :key="group.date" class="mb-8">
+                            <h3 class="sticky top-0 bg-[#0f172a]/90 backdrop-blur z-20 py-2 px-4 text-sm font-bold text-gray-400 mb-4 border-b border-white/5 w-full flex items-center justify-between">
+                                <span><i class="far fa-calendar-alt ml-2"></i> {{ formatDateHeader(group.date) }}</span>
+                                <span class="text-xs font-normal bg-white/10 px-2 py-1 rounded-full">{{ group.pairs.length }} ثنائي</span>
+                            </h3>
+                            
+                            <div v-for="(pair, idx) in group.pairs" :key="idx" class="mb-8 px-2">
+                                <div class="flex items-center justify-center gap-2 mb-3">
+                                     <span class="text-sm font-bold text-white">أنا</span>
+                                     <i class="fas fa-exchange-alt text-gray-500 text-xs"></i>
+                                     <span class="text-sm font-bold text-white">{{ pair.partner.name }}</span>
+                                </div>
+                                
+                                <div class="flex gap-3 h-56">
+                                    <div class="flex-1 rounded-2xl overflow-hidden bg-white/5 border border-white/10 relative group">
+                                        <template v-if="pair.me">
+                                            <img :src="pair.me.imageUrl" class="w-full h-full object-cover transition duration-500 group-hover:scale-110" @click="viewImage(pair.me.imageUrl, 'أنا')">
+                                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+                                            <div class="absolute bottom-2 right-2 text-xs font-bold text-white"><i class="fas fa-user-circle"></i> أنا</div>
+                                            <div class="absolute bottom-2 left-2 text-xs text-gray-300"><i class="fas fa-heart text-red-500"></i> {{ pair.me.likes?.length || 0 }}</div>
+                                        </template>
+                                        <div v-else class="w-full h-full flex items-center justify-center text-gray-500 text-xs flex-col gap-2 bg-black/20">
+                                            <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center"><i class="fas fa-ghost text-xl opacity-50"></i></div>
+                                            <span>لم ترسل</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-1 rounded-2xl overflow-hidden bg-white/5 border border-white/10 relative group">
+                                        <template v-if="pair.them">
+                                            <img :src="pair.them.imageUrl" class="w-full h-full object-cover transition duration-500 group-hover:scale-110" @click="viewImage(pair.them.imageUrl, pair.partner.name)">
+                                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+                                            <div class="absolute bottom-2 right-2 text-xs font-bold text-white"><i class="fas fa-user"></i> {{ pair.partner.name }}</div>
+                                            <div class="absolute bottom-2 left-2 text-xs text-gray-300"><i class="fas fa-heart text-red-500"></i> {{ pair.them.likes?.length || 0 }}</div>
+                                        </template>
+                                        <div v-else class="w-full h-full flex items-center justify-center text-gray-500 text-xs flex-col gap-2 bg-black/20">
+                                            <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center"><i class="fas fa-hourglass-half text-xl opacity-50"></i></div>
+                                            <span>لم يرسل</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="flex-1">
-                            <p class="font-bold text-white">{{ friend.name }}</p>
-                            <div class="flex items-center gap-2 text-xs text-gray-400"><span class="text-orange-400 font-bold">🔥 {{ friend.streak }}</span><span>{{ friend.dailyRating?.emoji || '😶' }}</span></div>
+                        <div v-if="timelineGroups.length === 0" class="text-center py-20 text-gray-500">
+                            <i class="fas fa-history text-4xl mb-3 opacity-30"></i>
+                            <p>لا توجد ذكريات مشتركة في التقويم</p>
                         </div>
-                        <i class="fas fa-paper-plane text-gray-500 group-hover:text-indigo-400 transition"></i>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- Image Viewer -->
-        <div v-if="viewingImage" class="fixed inset-0 z-[6000] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center animate-fade">
-            <button @click="viewingImage = null" class="absolute top-5 right-5 text-white bg-white/10 w-10 h-10 rounded-full flex items-center justify-center z-50 hover:bg-white/20 transition"><i class="fas fa-times"></i></button>
-            <div class="absolute top-5 left-5 text-white z-50"><p class="text-xs opacity-50">المرسل</p><h3 class="font-bold text-xl">{{ viewingName }}</h3></div>
-            <img :src="viewingImage" class="max-w-full max-h-[80vh] object-contain shadow-2xl rounded-lg">
-        </div>
-
-        <!-- Rating Modal -->
-        <transition name="fade">
-            <div v-if="showRatingModal" class="fixed inset-0 z-[5500] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-                <div class="glass w-full max-w-sm rounded-3xl p-6 text-center border border-white/10">
-                    <h3 class="font-bold text-xl mb-2 text-white">كيف كان يومك؟</h3>
-                    <div class="flex justify-center gap-3 mb-6 text-3xl"><button v-for="star in 5" :key="star" @click="setDailyRating(star)" class="transition transform hover:scale-125 focus:outline-none" :class="star <= tempRating ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-gray-600'">★</button></div>
-                    <div class="text-6xl mb-8 animate-bounce filter drop-shadow-lg">{{ getEmojiForStars(tempRating) }}</div>
-                    <div class="flex gap-3"><button @click="showRatingModal = false" class="flex-1 bg-white/5 text-gray-300 py-3 rounded-xl hover:bg-white/10 transition">إلغاء</button><button @click="saveRating" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-500 transition">حفظ التقييم</button></div>
-                </div>
-            </div>
-        </transition>
-
-        <!-- Send Type Modal -->
-        <div v-if="showSendTypeModal" class="fixed inset-0 z-[5500] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-            <div class="glass w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/10">
-                <h3 class="font-bold text-lg text-center mb-6">كيف تريد الإرسال؟</h3>
-                <button @click="confirmSend('memory')" class="w-full mb-3 bg-gradient-to-r from-orange-500 to-pink-600 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:scale-105 transition border border-white/10"><div class="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center text-xl"><i class="fas fa-fire"></i></div><div class="text-right"><h4 class="font-bold">إضافة للذكريات</h4><p class="text-xs opacity-90">يظهر للجميع + يزيد الستريك 🔥</p></div></button>
-                <button @click="confirmSend('chat')" class="w-full mb-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:scale-105 transition border border-white/10"><div class="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center text-xl"><i class="fas fa-comment-dots"></i></div><div class="text-right"><h4 class="font-bold">رسالة خاصة (شات)</h4><p class="text-xs opacity-90">محادثة صور فقط + لا يؤثر بالستريك</p></div></button>
-                <button @click="showSendTypeModal = false" class="w-full py-3 text-gray-400 font-bold hover:text-white transition">إلغاء</button>
-            </div>
-        </div>
-
-        <!-- Settings Modal (Refactored) -->
-        <div v-if="showSettingsModal" class="fixed inset-0 z-[5500] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-            <div class="glass w-full max-w-sm rounded-3xl overflow-hidden border border-white/10 max-h-[85vh] overflow-y-auto">
-                <div class="bg-indigo-600/50 p-4 flex justify-between items-center text-white"><h3 class="font-bold text-lg">الإعدادات</h3><button @click="closeSettings"><i class="fas fa-times"></i></button></div>
-                <div class="p-6 space-y-4">
-                    <!-- Install App -->
-                    <div class="bg-white/5 p-4 rounded-xl border border-white/5"><div v-if="installPrompt"><button @click="installApp" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold">تثبيت التطبيق</button></div><div v-else><p class="text-xs text-gray-400 text-center">التطبيق مثبت أو غير مدعوم</p></div></div>
-                    
-                    <!-- App Lock -->
-                    <div>
-                        <h4 class="font-bold text-white mb-2 text-center">قفل التطبيق</h4>
-                        <div class="bg-black/30 rounded-xl relative mx-auto border border-white/10" style="width: 250px; height: 250px;">
-                            <div class="pattern-lock-wrapper" style="width: 100%; height: 100%; margin:0;" @touchstart="startPattern" @touchmove="movePattern" @touchend="endSettingPattern" @mousedown="startPattern" @mousemove="movePattern" @mouseup="endSettingPattern"><canvas ref="settingCanvas" width="250" height="250" class="pattern-canvas"></canvas><div class="dots-container"><div v-for="n in 9" :key="n" class="dot-cell"><div class="dot" :class="{'active': currentPattern.includes(n-1)}"></div></div></div></div>
+                <!-- --- CANVAS PAGE --- -->
+                <div v-show="currentView === 'canvas'" class="w-full h-full flex flex-col relative">
+                    <!-- Canvas Header -->
+                    <div class="absolute top-0 left-0 w-full p-4 flex justify-between items-start z-[50] pointer-events-none">
+                         <!-- Mode Switcher -->
+                        <div class="pointer-events-auto bg-black/60 backdrop-blur-md rounded-2xl p-1 flex gap-1 border border-white/10 shadow-lg">
+                            <button @click="switchMode('draw')" :class="{'bg-indigo-600 text-white shadow': mode === 'draw', 'text-gray-400 hover:text-white': mode !== 'draw'}" class="px-4 py-2 rounded-xl text-sm font-bold transition">رسم</button>
+                            <button @click="switchMode('color')" :class="{'bg-indigo-600 text-white shadow': mode === 'color', 'text-gray-400 hover:text-white': mode !== 'color'}" class="px-4 py-2 rounded-xl text-sm font-bold transition">تلوين</button>
                         </div>
-                        <p class="text-center text-xs text-indigo-400 mt-2 font-bold">{{ settingMessage }}</p>
-                    </div>
-                    <button v-if="tempPattern.length > 0" @click="savePattern" class="w-full bg-green-600 text-white py-2 rounded-lg font-bold shadow-lg">حفظ النقش</button>
-                    <button v-if="userData.lockPattern && userData.lockPattern.length > 0" @click="removeLock" class="w-full bg-red-500/20 text-red-400 py-2 rounded-lg font-bold border border-red-500/30 hover:bg-red-500/30">إلغاء القفل</button>
 
-                    <!-- Developer Options (Hidden) -->
-                     <div v-if="isAdmin" class="pt-4 border-t border-white/10">
-                        <h4 class="font-bold text-yellow-400 mb-2"><i class="fas fa-user-secret mr-2"></i>خيارات المطور</h4>
-                        <button @click="openAdminPanel" class="w-full bg-yellow-500/20 text-yellow-400 py-2 rounded-lg font-bold border border-yellow-500/30 hover:bg-yellow-500/30">فتح لوحة التحكم</button>
-                    </div>
-
-                    <!-- Logout -->
-                     <div class="pt-4 border-t border-white/10">
-                        <button @click="logout" class="w-full bg-red-600 text-white py-3 rounded-xl font-bold hover:bg-red-700 transition flex items-center justify-center gap-2">
-                            <i class="fas fa-sign-out-alt"></i> تسجيل خروج
+                        <!-- Session Status -->
+                        <button @click="openPairingModal" class="pointer-events-auto w-10 h-10 rounded-full glass flex items-center justify-center shadow-lg border border-white/10" :class="pairing.isPaired ? 'text-green-400 paired-pulse border-green-500/30' : 'text-gray-400'">
+                            <i class="fas" :class="pairing.isPaired ? 'fa-link' : 'fa-unlink'"></i>
                         </button>
+                    </div>
+
+                    <!-- Magic Wand Button -->
+                    <button v-if="mode === 'color'" @click="showMagicModal = true" class="absolute top-20 left-4 z-[45] pointer-events-auto glass w-12 h-12 rounded-full flex items-center justify-center text-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.3)] hover:scale-110 transition border border-yellow-500/20">
+                        <i class="fas fa-magic text-xl"></i>
+                    </button>
+                    
+                    <!-- Trash Button for Generated Image -->
+                    <button v-if="mode === 'color' && coloringBaseImage" @click="deleteGeneratedImage" class="absolute top-20 left-20 z-[45] pointer-events-auto glass w-12 h-12 rounded-full flex items-center justify-center text-red-400 shadow-lg hover:bg-red-500/20 transition border border-red-500/20">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+
+                    <!-- Main Canvas Area -->
+                    <div :class="isFullscreen ? 'fixed inset-0 z-[100] bg-[#0f172a]' : 'flex-1 relative w-full overflow-hidden'" ref="drawingContainer">
+                        <!-- Controls -->
+                        <div v-if="mode === 'draw' || mode === 'color'" class="absolute top-20 right-4 z-[45] flex flex-col gap-2 pointer-events-auto" :class="{'top-4': isFullscreen}">
+                            <button @click="toggleFullscreen" class="glass w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition"><i class="fas" :class="isFullscreen ? 'fa-compress' : 'fa-expand'"></i></button>
+                            <button @click="resetView" class="glass w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition"><i class="fas fa-compress-arrows-alt"></i></button>
+                            <div class="h-px w-full bg-white/10 my-1"></div>
+                            <button @click="undo" :disabled="localActionIds.length === 0" class="glass w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition disabled:opacity-30"><i class="fas fa-undo"></i></button>
+                            <button @click="redo" :disabled="redoStack.length === 0" class="glass w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition disabled:opacity-30"><i class="fas fa-redo"></i></button>
+                            <div class="h-px w-full bg-white/10 my-1"></div>
+                            <button @click="showConfirm('مسح اللوحة', 'هل أنت متأكد من مسح الرسم بالكامل؟', 'fas fa-trash-alt', clearCanvas)" class="glass w-10 h-10 rounded-full flex items-center justify-center text-red-400 hover:bg-red-500/20 transition"><i class="fas fa-trash"></i></button>
+                        </div>
+
+                        <!-- Canvas Element -->
+                        <div v-show="mode === 'draw' || mode === 'color'" class="canvas-container">
+                            <div :style="{ transform: 'translate(' + panX + 'px, ' + panY + 'px) scale(' + zoomLevel + ')' }" class="w-full h-full flex items-center justify-center origin-center will-change-transform">
+                                <canvas ref="canvas" width="1080" height="1920"
+                                        @mousedown="handleStart" @mousemove="handleMove" @mouseup="handleEnd" 
+                                        @touchstart="handleStart" @touchmove="handleMove" @touchend="handleEnd" 
+                                        class="main-canvas block"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Image Upload Mode -->
+                        <div v-show="mode === 'image'" class="w-full h-full flex flex-col items-center justify-center relative p-4">
+                            <img v-if="uploadedImage" :src="uploadedImage" class="absolute inset-0 w-full h-full object-contain p-4 z-10">
+                            <button v-if="uploadedImage" @click.stop="removeImage" class="absolute top-20 right-4 z-50 bg-red-600 text-white rounded-full w-10 h-10 shadow-lg flex items-center justify-center"><i class="fas fa-times"></i></button>
+                            <div v-if="!uploadedImage" class="text-center p-10 border-2 border-dashed border-white/20 rounded-3xl glass w-full max-w-sm flex flex-col items-center">
+                                <i class="fas fa-cloud-upload-alt text-4xl text-indigo-400 mb-4"></i>
+                                <p class="font-bold text-gray-300">اضغط لاختيار صورة</p>
+                            </div>
+                            <input v-if="!uploadedImage" type="file" @change="handleImageUpload" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" ref="imageUploadInput">
+                            <button v-if="uploadedImage" @click="openFriendSelector" class="absolute bottom-24 bg-indigo-600 text-white px-8 py-3 rounded-xl shadow-xl font-bold z-50 flex items-center gap-2 hover:bg-indigo-700 transition"><span>إرسال الصورة</span> <i class="fas fa-paper-plane"></i></button>
+                        </div>
+
+                        <!-- AI Loading Overlay -->
+                        <div v-if="isGeneratingAI" class="absolute inset-0 z-[100] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center">
+                            <div class="relative">
+                                 <div class="w-20 h-20 border-4 border-indigo-500 rounded-full animate-ping absolute top-0 left-0 opacity-20"></div>
+                                 <i class="fas fa-magic text-4xl text-indigo-400 animate-pulse"></i>
+                            </div>
+                            <p class="font-bold text-white mt-8 text-lg">جاري التوليد بالذكاء الاصطناعي...</p>
+                        </div>
+                    </div>
+
+                    <!-- Tools Toolbar Container with Toggle -->
+                    <div v-if="mode !== 'image' && !isWaitingForAccept" 
+                         class="absolute bottom-[90px] left-1/2 transform -translate-x-1/2 z-[150] w-[95%] max-w-[400px] transition-transform duration-300 ease-in-out"
+                         :class="{ 'translate-y-[120%]': isToolsCollapsed }">
+                        <!-- Toggle Arrow Button -->
+                         <button @click="isToolsCollapsed = !isToolsCollapsed" 
+                                 class="absolute -top-10 left-1/2 -translate-x-1/2 w-12 h-8 rounded-t-xl glass-heavy flex items-center justify-center border-t border-x border-white/10 text-gray-400 hover:text-white transition shadow-lg">
+                            <i class="fas transition-transform duration-300" :class="isToolsCollapsed ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div class="glass-heavy rounded-2xl p-2 flex items-center justify-between shadow-2xl border border-white/10">
+                            <!-- Main Tools -->
+                            <div class="flex gap-2 items-center">
+                                <button @click="activatePen" :class="!isBucket && !isEraser ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/50' : 'text-gray-400 hover:bg-white/10'" class="w-10 h-10 rounded-xl flex items-center justify-center transition"><i class="fas fa-pen"></i></button>
+                                <button @click="activateBucket" :class="isBucket ? 'bg-pink-500 text-white shadow-lg shadow-pink-500/50' : 'text-gray-400 hover:bg-white/10'" class="w-10 h-10 rounded-xl flex items-center justify-center transition"><i class="fas fa-fill-drip"></i></button>
+                                <button @click="activateEraser" :class="isEraser ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400 hover:bg-white/10'" class="w-10 h-10 rounded-xl flex items-center justify-center transition"><i class="fas fa-eraser"></i></button>
+                                <!-- Brush Size -->
+                                 <div class="relative">
+                                    <button @click.stop="toggleBrushPopup" class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
+                                        <div class="rounded-full bg-white" :style="{ width: Math.min(brushSize, 16) + 'px', height: Math.min(brushSize, 16) + 'px' }"></div>
+                                    </button>
+                                    <div v-if="showBrushPopup" class="absolute bottom-full left-0 mb-3 glass p-3 rounded-xl w-48 flex items-center gap-2" @click.stop>
+                                        <input type="range" v-model="brushSize" min="1" max="40" class="flex-1">
+                                        <span class="text-xs font-bold w-6">{{ brushSize }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="w-px h-8 bg-white/10 mx-1"></div>
+                            <!-- Colors -->
+                            <div class="flex gap-2 items-center px-1">
+                                 <div @click="openColorPicker" class="w-10 h-10 rounded-full rainbow-btn shrink-0 cursor-pointer flex items-center justify-center shadow-lg"><i class="fas fa-palette text-sm text-white drop-shadow-md"></i></div>
+                                 <div class="w-8 h-8 rounded-full border-2 border-white shadow-inner transition" :style="{ backgroundColor: brushColor }"></div>
+                            </div>
+                            <!-- Send Action -->
+                            <button @click="openFriendSelector" class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition ml-2 shrink-0">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- --- CHAT PAGE --- -->
+                <div v-if="currentView === 'chat'" class="w-full h-full flex flex-col overflow-hidden bg-[#0f172a]">
+                     <div v-if="!selectedChatFriend" class="p-4 overflow-y-auto h-full pb-24">
+                        <h2 class="text-2xl font-bold mb-6 px-2">الرسائل والمحادثات</h2>
+                        <div v-if="chatList.length === 0" class="text-center py-20 opacity-50"><i class="fas fa-comment-slash text-4xl mb-2"></i><p>لا يوجد أصدقاء متصلين</p></div>
+                        <div class="grid gap-3">
+                             <div v-for="friend in chatList" :key="friend.id" @click="selectChatFriend(friend)" class="glass p-4 rounded-xl flex items-center gap-4 cursor-pointer hover:bg-white/10 transition group border border-white/5">
+                                 <div class="w-14 h-14 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-300 font-bold text-xl border border-indigo-500/30 group-hover:border-indigo-500 transition overflow-hidden">
+                                     <img v-if="friend.photoURL" :src="friend.photoURL" class="w-full h-full object-cover">
+                                     <span v-else>{{ friend.name.charAt(0) }}</span>
+                                 </div>
+                                 <div class="flex-1">
+                                     <h3 class="font-bold text-lg text-white">{{ friend.name }}</h3>
+                                     <p class="text-xs text-gray-400">اضغط للمراسلة...</p>
+                                 </div>
+                                 <i class="fas fa-chevron-left text-gray-500 group-hover:text-indigo-400 transition"></i>
+                             </div>
+                        </div>
+                    </div>
+                    <div v-else class="flex flex-col h-full pb-24">
+                        <header class="glass-heavy p-4 flex items-center gap-4 shrink-0 z-20">
+                            <button @click="selectedChatFriend = null" class="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center transition"><i class="fas fa-arrow-right"></i></button>
+                            <div class="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center font-bold overflow-hidden">
+                                 <img v-if="selectedChatFriend.photoURL" :src="selectedChatFriend.photoURL" class="w-full h-full object-cover">
+                                 <span v-else>{{ selectedChatFriend.name.charAt(0) }}</span>
+                            </div>
+                            <h3 class="font-bold text-lg">{{ selectedChatFriend.name }}</h3>
+                        </header>
+                        <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scroll" ref="chatContainer">
+                            <div v-for="msg in currentChatMessages" :key="msg.id" class="flex flex-col w-full" :class="msg.senderId === user.uid ? 'items-end' : 'items-start'">
+                                <div class="max-w-[75%] rounded-2xl overflow-hidden shadow-lg border border-white/10" :class="msg.senderId === user.uid ? 'bg-indigo-600 rounded-br-none' : 'bg-gray-700 rounded-bl-none'">
+                                    <img :src="msg.imageUrl" @click="viewImage(msg.imageUrl, msg.senderId === user.uid ? 'أنت' : selectedChatFriend.name)" class="w-full h-auto object-cover max-h-80 min-w-[150px] bg-black/20 cursor-pointer">
+                                </div>
+                                <span class="text-[10px] text-gray-400 mt-1 mx-1">{{ new Date(msg.timestamp).toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- --- PROFILE PAGE --- -->
+                <div v-if="currentView === 'profile'" class="w-full h-full overflow-y-auto p-6 pb-24 custom-scroll">
+                    <!-- Profile Header -->
+                    <div class="flex justify-between items-center mb-6">
+                         <h1 class="text-3xl font-bold">الملف الشخصي</h1>
+                         <button @click="openSettings" class="w-12 h-12 rounded-full glass flex items-center justify-center text-blue-400 hover:bg-white/10 transition border border-white/10">
+                            <i class="fas fa-cog text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="flex flex-col items-center mb-8">
+                        <div class="w-32 h-32 rounded-full bg-gradient-to-tr from-indigo-500 to-pink-500 p-1 mb-3 shadow-[0_0_30px_rgba(99,102,241,0.3)] relative group">
+                            <div class="w-full h-full rounded-full bg-[#1e293b] flex items-center justify-center text-3xl font-bold overflow-hidden relative">
+                                 <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover">
+                                 <span v-else>{{ userData.name?.charAt(0) }}</span>
+                                 <div @click="triggerProfileUpload" class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer">
+                                     <i class="fas fa-camera text-white text-2xl"></i>
+                                 </div>
+                            </div>
+                            <input type="file" ref="profileInput" @change="handleProfileUpload" accept="image/*" class="hidden">
+                        </div>
+                        <h2 class="text-2xl font-bold">{{ userData.name }}</h2>
+                        <p class="text-gray-400 text-sm">{{ userData.email }}</p>
+                        <div class="mt-2 bg-white/5 px-3 py-1 rounded-full text-xs text-gray-400 border border-white/5">{{ getDeviceInfo() }}</div>
+                    </div>
+                     <div class="grid grid-cols-2 gap-4 mb-8">
+                         <div class="glass p-4 rounded-xl text-center border border-white/10">
+                             <i class="fas fa-fire text-orange-400 text-2xl mb-2"></i>
+                             <p class="text-2xl font-bold text-white">{{ userData.streak || 0 }}</p>
+                             <p class="text-xs text-gray-400">ستريك</p>
+                         </div>
+                         <div class="glass p-4 rounded-xl text-center border border-white/10">
+                             <i class="fas fa-star text-yellow-400 text-2xl mb-2"></i>
+                             <p class="text-2xl font-bold text-white">{{ userData.dailyRating?.stars || 0 }}</p>
+                             <p class="text-xs text-gray-400">تقييم اليوم</p>
+                         </div>
                      </div>
                 </div>
-            </div>
+            </main>
+
+            <!-- --- BOTTOM NAVIGATION --- -->
+            <nav class="fixed bottom-0 left-0 w-full z-[50] glass-heavy pb-safe pt-2 px-6 flex justify-between items-center h-[80px] rounded-t-3xl shadow-[0_-5px_20px_rgba(0,0,0,0.3)]">
+                <button @click="switchView('home')" class="nav-item flex flex-col items-center gap-1 transition-all duration-300 w-16" :class="{ 'active': currentView === 'home' || currentView === 'timeline' }">
+                    <i class="fas fa-home text-xl text-gray-500 transition-colors duration-300"></i>
+                    <span class="text-[10px] text-gray-500 font-bold opacity-0 transition-opacity duration-300">الرئيسية</span>
+                </button>
+                <button @click="switchView('chat')" class="nav-item flex flex-col items-center gap-1 transition-all duration-300 w-16" :class="{ 'active': currentView === 'chat' }">
+                    <i class="fas fa-comments text-xl text-gray-500 transition-colors duration-300"></i>
+                    <span class="text-[10px] text-gray-500 font-bold opacity-0 transition-opacity duration-300">شات</span>
+                </button>
+                <button @click="triggerCamera" class="relative -top-8 w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-[0_10px_20px_rgba(99,102,241,0.5)] border-4 border-[#0f172a] transform transition hover:scale-105 active:scale-95">
+                    <i class="fas fa-camera text-white text-2xl"></i>
+                </button>
+                <button @click="switchView('canvas')" class="nav-item flex flex-col items-center gap-1 transition-all duration-300 w-16" :class="{ 'active': currentView === 'canvas' }">
+                    <i class="fas fa-paint-brush text-xl text-gray-500 transition-colors duration-300"></i>
+                    <span class="text-[10px] text-gray-500 font-bold opacity-0 transition-opacity duration-300">رسم</span>
+                </button>
+                <button @click="switchView('profile')" class="nav-item flex flex-col items-center gap-1 transition-all duration-300 w-16" :class="{ 'active': currentView === 'profile' }">
+                    <i class="fas fa-user text-xl text-gray-500 transition-colors duration-300"></i>
+                    <span class="text-[10px] text-gray-500 font-bold opacity-0 transition-opacity duration-300">أنا</span>
+                </button>
+            </nav>
         </div>
-        
-        <!-- Pairing Modal -->
-        <div v-if="showPairingModal" class="fixed inset-0 z-[5300] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-            <div class="glass w-full max-w-sm rounded-3xl p-6">
-                <div class="flex justify-between items-center mb-4"><h3 class="font-bold text-lg">الرسم المشترك</h3><button @click="showPairingModal=false" class="text-gray-400"><i class="fas fa-times"></i></button></div>
-                <div v-if="pairing.isPaired" class="text-center py-8">
-                     <div class="w-16 h-16 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-3xl mx-auto mb-4 animate-pulse border border-green-500/30"><i class="fas fa-link"></i></div>
-                     <p class="text-green-400 font-bold mb-6">متصل مع {{ pairing.partnerName }}</p>
-                     <button @click="disconnectPairing(false)" class="bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg font-bold">إلغاء الاقتران</button>
-                </div>
-                <div v-else class="space-y-3">
-                    <p class="text-xs text-gray-400 mb-2">اختر صديق للرسم معه الآن:</p>
-                    <div v-for="friend in onlineUsers" :key="friend.id" @click="openSessionSetup(friend)" class="glass p-3 rounded-xl flex items-center gap-3 cursor-pointer hover:bg-white/10 transition">
-                         <div class="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center font-bold text-indigo-300 overflow-hidden">
-                             <img v-if="friend.photoURL" :src="friend.photoURL" class="w-full h-full object-cover">
-                             <span v-else>{{ friend.name.charAt(0) }}</span>
-                        </div>
-                         <span class="font-bold flex-1">{{ friend.name }}</span>
-                         <i class="fas fa-plug text-gray-500"></i>
-                    </div>
-                </div>
+    </template>
+
+    <!-- Modals and Overlays (Outside the flex scaffold for proper layering) -->
+    <!-- ... Modals ... -->
+
+    <!-- Story Viewer Modal -->
+    <div v-if="showStoryViewer" class="fixed inset-0 z-[7000] bg-black flex flex-col">
+        <!-- Progress Bar -->
+        <div class="absolute top-0 left-0 w-full z-20 flex gap-1 p-2">
+            <div v-for="(story, index) in currentStories" :key="story.id" class="flex-1 story-progress-bar">
+                <div class="story-progress-fill" :style="{ width: index < currentStoryIndex ? '100%' : (index === currentStoryIndex ? storyProgress + '%' : '0%') }"></div>
             </div>
-        </div>
-        
-        <!-- Session Request Modal -->
-        <div v-if="showSessionSetupModal" class="fixed inset-0 z-[5600] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-             <div class="glass w-full max-w-sm rounded-3xl p-6 animate-slide-up border border-white/10">
-                <h3 class="font-bold text-lg mb-4">إعداد الجلسة مع {{ setupParams.targetFriend?.name }}</h3>
-                <div class="space-y-4">
-                    <div class="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center justify-between">
-                         <span class="font-bold text-sm">مشاركة رسمتي الحالية</span>
-                         <input type="checkbox" v-model="setupParams.shareCanvas" class="w-5 h-5 accent-indigo-600 rounded">
-                    </div>
-                    <button @click="startSessionRequest" class="w-full bg-green-600 text-white font-bold py-3 rounded-xl shadow-lg mt-2">إرسال دعوة</button>
-                    <button @click="showSessionSetupModal = false" class="w-full text-gray-400 text-sm">إلغاء</button>
-                </div>
-             </div>
         </div>
 
-        <!-- Incoming Request -->
-        <div v-if="incomingRequest" class="fixed inset-0 z-[5700] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-             <div class="glass w-full max-w-sm rounded-3xl p-6 text-center border border-indigo-500/50 shadow-[0_0_50px_rgba(99,102,241,0.2)]">
-                 <div class="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl text-indigo-400 animate-bounce"><i class="fas fa-bell"></i></div>
-                 <h3 class="font-bold text-xl mb-2">{{ incomingRequest.senderName }}</h3>
-                 <p class="text-gray-300 mb-6">يريد الرسم معك الآن!</p>
-                 <div class="flex gap-3">
-                     <button @click="rejectPairing" class="flex-1 bg-white/10 text-white py-3 rounded-xl font-bold">رفض</button>
-                     <button @click="acceptPairing" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/40">قبول</button>
+        <!-- Header -->
+        <div class="absolute top-4 left-0 w-full z-20 flex justify-between items-center px-4 mt-2">
+            <div class="flex items-center gap-2">
+                <button v-if="currentStories[currentStoryIndex]?.userId === user.uid" @click="deleteCurrentStory" class="text-red-400 hover:text-red-600 mr-2"><i class="fas fa-trash"></i></button>
+                
+                <div class="w-8 h-8 rounded-full overflow-hidden border border-white">
+                    <img v-if="activeStoryUser.photoURL" :src="activeStoryUser.photoURL" class="w-full h-full object-cover">
+                     <span v-else class="w-full h-full bg-gray-500 flex items-center justify-center font-bold text-xs">{{ activeStoryUser.name?.charAt(0) }}</span>
+                </div>
+                <span class="font-bold text-sm text-shadow">{{ activeStoryUser.name }}</span>
+                <span class="text-xs opacity-70">{{ getStoryTimeAgo(currentStories[currentStoryIndex]?.timestamp) }}</span>
+            </div>
+            <div class="flex gap-4">
+                 <button @click="closeStoryViewer" class="text-white"><i class="fas fa-times text-xl"></i></button>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 flex items-center justify-center relative" @click="nextStory" @touchstart="pauseStory" @touchend="resumeStory">
+            <div v-if="loadingStory" class="absolute z-10 text-white"><i class="fas fa-spinner fa-spin text-3xl"></i></div>
+            <img v-if="currentStories[currentStoryIndex]?.type === 'image'" :src="currentStories[currentStoryIndex].url" class="max-w-full max-h-full object-contain">
+            <video v-if="currentStories[currentStoryIndex]?.type === 'video'" :src="currentStories[currentStoryIndex].url" autoplay playsinline class="max-w-full max-h-full object-contain" @ended="nextStory" ref="storyVideo"></video>
+            
+            <!-- Navigation Zones -->
+            <div class="absolute inset-y-0 left-0 w-1/4 z-10" @click.stop="prevStory"></div>
+        </div>
+    </div>
+
+    <!-- ... Other Modals ... -->
+    <!-- Magic Wand Modal -->
+    <div v-if="showMagicModal" class="fixed inset-0 z-[5500] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+         <div class="glass w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-slide-up border border-white/10 relative">
+             <button @click="showMagicModal = false" class="absolute top-4 left-4 text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+             <div class="text-center mb-6">
+                 <div class="w-16 h-16 rounded-full bg-yellow-400/20 text-yellow-400 flex items-center justify-center mx-auto mb-4 text-3xl shadow-[0_0_20px_rgba(250,204,21,0.3)]">
+                     <i class="fas fa-magic"></i>
                  </div>
+                 <h3 class="font-bold text-xl text-white">الرسام السحري</h3>
+                 <p class="text-sm text-gray-400 mt-2">اكتب وصفاً للرسمة التي تريد تلوينها</p>
              </div>
-        </div>
+             <textarea v-model="coloringPrompt" rows="3" placeholder="مثلاً: أميرة في قلعة، سيارة سباق، ديناصور صغير..." class="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none transition mb-4 resize-none"></textarea>
+             <button @click="generateColoringPage(); showMagicModal = false" :disabled="isGenerating || !coloringPrompt.trim()" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-indigo-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                 <span v-if="isGenerating"><i class="fas fa-spinner fa-spin"></i> جاري التوليد...</span>
+                 <span v-else>ابدا السحر! <i class="fas fa-magic"></i></span>
+             </button>
+         </div>
+    </div>
 
-    </template> <!-- End user check -->
+    <!-- ... Color Picker, Friends, etc ... -->
+    <!-- (Include all other existing modals here, ensuring they are outside the flex scaffold) -->
+    
+    <!-- Color Picker Modal -->
+    <div v-if="showColorPicker" class="fixed inset-0 z-[5300] bg-black/60 backdrop-blur-md flex items-center justify-center p-4" @click.self="showColorPicker = false">
+        <div class="glass w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-slide-up border border-white/10">
+            <h3 class="font-bold text-lg mb-4 text-center">اختر لوناً</h3>
+            <div class="color-picker-sv mb-4 border border-white/20" :style="{ backgroundColor: `hsl(${picker.h}, 100%, 50%)` }" @mousedown="startPickerDrag" @mousemove="movePicker" @mouseup="endPicker" @touchstart.prevent="startPickerDrag" @touchmove.prevent="movePicker" @touchend="endPicker" ref="pickerArea">
+                <div class="sv-white"></div><div class="sv-black"></div><div class="picker-cursor" :style="{ left: picker.s + '%', top: (100 - picker.v) + '%' }"></div>
+            </div>
+            <div class="mb-6"><input type="range" v-model.number="picker.h" min="0" max="360" class="w-full h-3 rounded-full appearance-none cursor-pointer" style="background: linear-gradient(to right, red, yellow, lime, cyan, blue, magenta, red);"></div>
+            <div class="flex items-center justify-between gap-4">
+                <div class="w-12 h-12 rounded-full border-2 border-white/20 shadow-inner" :style="{ backgroundColor: tempColor }"></div>
+                <button @click="selectPickerColor" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-600/30">تأكيد</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Friend Selection Modal -->
+    <div v-if="showFriendModal" class="fixed inset-0 z-[5400] bg-black/70 backdrop-blur-md flex items-end sm:items-center justify-center">
+        <div class="glass-heavy w-full sm:w-11/12 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-slide-up max-h-[80vh] flex flex-col border border-white/10">
+            <div class="flex justify-between items-center mb-6"><h3 class="font-bold text-lg">إرسال الرسمة إلى...</h3><button @click="showFriendModal=false" class="text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
+            <div class="grid grid-cols-1 gap-3 overflow-y-auto p-1 custom-scroll">
+                <div v-for="friend in onlineUsers" :key="friend.id" @click="onFriendSelected(friend)" class="flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-indigo-500 cursor-pointer transition group">
+                    <div class="w-12 h-12 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-lg group-hover:bg-indigo-500 group-hover:text-white transition overflow-hidden">
+                         <img v-if="friend.photoURL" :src="friend.photoURL" class="w-full h-full object-cover">
+                         <span v-else>{{ friend.name.charAt(0) }}</span>
+                    </div>
+                    <div class="flex-1">
+                        <p class="font-bold text-white">{{ friend.name }}</p>
+                        <div class="flex items-center gap-2 text-xs text-gray-400"><span class="text-orange-400 font-bold">🔥 {{ friend.streak }}</span><span>{{ friend.dailyRating?.emoji || '😶' }}</span></div>
+                    </div>
+                    <i class="fas fa-paper-plane text-gray-500 group-hover:text-indigo-400 transition"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Viewer -->
+    <div v-if="viewingImage" class="fixed inset-0 z-[6000] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center animate-fade">
+        <button @click="viewingImage = null" class="absolute top-5 right-5 text-white bg-white/10 w-10 h-10 rounded-full flex items-center justify-center z-50 hover:bg-white/20 transition"><i class="fas fa-times"></i></button>
+        <div class="absolute top-5 left-5 text-white z-50"><p class="text-xs opacity-50">المرسل</p><h3 class="font-bold text-xl">{{ viewingName }}</h3></div>
+        <img :src="viewingImage" class="max-w-full max-h-[80vh] object-contain shadow-2xl rounded-lg">
+    </div>
+
+    <!-- Rating Modal -->
+    <transition name="fade">
+        <div v-if="showRatingModal" class="fixed inset-0 z-[5500] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+            <div class="glass w-full max-w-sm rounded-3xl p-6 text-center border border-white/10">
+                <h3 class="font-bold text-xl mb-2 text-white">كيف كان يومك؟</h3>
+                <div class="flex justify-center gap-3 mb-6 text-3xl"><button v-for="star in 5" :key="star" @click="setDailyRating(star)" class="transition transform hover:scale-125 focus:outline-none" :class="star <= tempRating ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-gray-600'">★</button></div>
+                <div class="text-6xl mb-8 animate-bounce filter drop-shadow-lg">{{ getEmojiForStars(tempRating) }}</div>
+                <div class="flex gap-3"><button @click="showRatingModal = false" class="flex-1 bg-white/5 text-gray-300 py-3 rounded-xl hover:bg-white/10 transition">إلغاء</button><button @click="saveRating" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-500 transition">حفظ التقييم</button></div>
+            </div>
+        </div>
+    </transition>
+
+    <!-- Send Type Modal -->
+    <div v-if="showSendTypeModal" class="fixed inset-0 z-[5500] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/10">
+            <h3 class="font-bold text-lg text-center mb-6">كيف تريد الإرسال؟</h3>
+            <button @click="confirmSend('memory')" class="w-full mb-3 bg-gradient-to-r from-orange-500 to-pink-600 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:scale-105 transition border border-white/10"><div class="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center text-xl"><i class="fas fa-fire"></i></div><div class="text-right"><h4 class="font-bold">إضافة للذكريات</h4><p class="text-xs opacity-90">يظهر للجميع + يزيد الستريك 🔥</p></div></button>
+            <button @click="confirmSend('chat')" class="w-full mb-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:scale-105 transition border border-white/10"><div class="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center text-xl"><i class="fas fa-comment-dots"></i></div><div class="text-right"><h4 class="font-bold">رسالة خاصة (شات)</h4><p class="text-xs opacity-90">محادثة صور فقط + لا يؤثر بالستريك</p></div></button>
+            <button @click="showSendTypeModal = false" class="w-full py-3 text-gray-400 font-bold hover:text-white transition">إلغاء</button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div v-if="showSettingsModal" class="fixed inset-0 z-[5500] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass w-full max-w-sm rounded-3xl overflow-hidden border border-white/10 max-h-[85vh] overflow-y-auto">
+            <div class="bg-indigo-600/50 p-4 flex justify-between items-center text-white"><h3 class="font-bold text-lg">الإعدادات</h3><button @click="closeSettings"><i class="fas fa-times"></i></button></div>
+            <div class="p-6 space-y-4">
+                <div class="bg-white/5 p-4 rounded-xl border border-white/5"><div v-if="installPrompt"><button @click="installApp" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold">تثبيت التطبيق</button></div><div v-else><p class="text-xs text-gray-400 text-center">التطبيق مثبت أو غير مدعوم</p></div></div>
+                <div>
+                    <h4 class="font-bold text-white mb-2 text-center">قفل التطبيق</h4>
+                    <div class="bg-black/30 rounded-xl relative mx-auto border border-white/10" style="width: 250px; height: 250px;">
+                        <div class="pattern-lock-wrapper" style="width: 100%; height: 100%; margin:0;" @touchstart="startPattern" @touchmove="movePattern" @touchend="endSettingPattern" @mousedown="startPattern" @mousemove="movePattern" @mouseup="endSettingPattern"><canvas ref="settingCanvas" width="250" height="250" class="pattern-canvas"></canvas><div class="dots-container"><div v-for="n in 9" :key="n" class="dot-cell"><div class="dot" :class="{'active': currentPattern.includes(n-1)}"></div></div></div></div>
+                    </div>
+                    <p class="text-center text-xs text-indigo-400 mt-2 font-bold">{{ settingMessage }}</p>
+                </div>
+                <button v-if="tempPattern.length > 0" @click="savePattern" class="w-full bg-green-600 text-white py-2 rounded-lg font-bold shadow-lg">حفظ النقش</button>
+                <button v-if="userData.lockPattern && userData.lockPattern.length > 0" @click="removeLock" class="w-full bg-red-500/20 text-red-400 py-2 rounded-lg font-bold border border-red-500/30 hover:bg-red-500/30">إلغاء القفل</button>
+                 <div v-if="isAdmin" class="pt-4 border-t border-white/10">
+                    <h4 class="font-bold text-yellow-400 mb-2"><i class="fas fa-user-secret mr-2"></i>خيارات المطور</h4>
+                    <button @click="openAdminPanel" class="w-full bg-yellow-500/20 text-yellow-400 py-2 rounded-lg font-bold border border-yellow-500/30 hover:bg-yellow-500/30">فتح لوحة التحكم</button>
+                </div>
+                 <div class="pt-4 border-t border-white/10">
+                    <button @click="logout" class="w-full bg-red-600 text-white py-3 rounded-xl font-bold hover:bg-red-700 transition flex items-center justify-center gap-2">
+                        <i class="fas fa-sign-out-alt"></i> تسجيل خروج
+                    </button>
+                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pairing Modal -->
+    <div v-if="showPairingModal" class="fixed inset-0 z-[5300] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass w-full max-w-sm rounded-3xl p-6">
+            <div class="flex justify-between items-center mb-4"><h3 class="font-bold text-lg">الرسم المشترك</h3><button @click="showPairingModal=false" class="text-gray-400"><i class="fas fa-times"></i></button></div>
+            <div v-if="pairing.isPaired" class="text-center py-8">
+                 <div class="w-16 h-16 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-3xl mx-auto mb-4 animate-pulse border border-green-500/30"><i class="fas fa-link"></i></div>
+                 <p class="text-green-400 font-bold mb-6">متصل مع {{ pairing.partnerName }}</p>
+                 <button @click="disconnectPairing(false)" class="bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg font-bold">إلغاء الاقتران</button>
+            </div>
+            <div v-else class="space-y-3">
+                <p class="text-xs text-gray-400 mb-2">اختر صديق للرسم معه الآن:</p>
+                <div v-for="friend in onlineUsers" :key="friend.id" @click="openSessionSetup(friend)" class="glass p-3 rounded-xl flex items-center gap-3 cursor-pointer hover:bg-white/10 transition">
+                     <div class="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center font-bold text-indigo-300 overflow-hidden">
+                         <img v-if="friend.photoURL" :src="friend.photoURL" class="w-full h-full object-cover">
+                         <span v-else>{{ friend.name.charAt(0) }}</span>
+                    </div>
+                     <span class="font-bold flex-1">{{ friend.name }}</span>
+                     <i class="fas fa-plug text-gray-500"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Session Request Modal -->
+    <div v-if="showSessionSetupModal" class="fixed inset-0 z-[5600] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+         <div class="glass w-full max-w-sm rounded-3xl p-6 animate-slide-up border border-white/10">
+            <h3 class="font-bold text-lg mb-4">إعداد الجلسة مع {{ setupParams.targetFriend?.name }}</h3>
+            <div class="space-y-4">
+                <div class="bg-white/5 p-4 rounded-xl border border-white/5 flex items-center justify-between">
+                     <span class="font-bold text-sm">مشاركة رسمتي الحالية</span>
+                     <input type="checkbox" v-model="setupParams.shareCanvas" class="w-5 h-5 accent-indigo-600 rounded">
+                </div>
+                <button @click="startSessionRequest" class="w-full bg-green-600 text-white font-bold py-3 rounded-xl shadow-lg mt-2">إرسال دعوة</button>
+                <button @click="showSessionSetupModal = false" class="w-full text-gray-400 text-sm">إلغاء</button>
+            </div>
+         </div>
+    </div>
+
+    <!-- Incoming Request -->
+    <div v-if="incomingRequest" class="fixed inset-0 z-[5700] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+         <div class="glass w-full max-w-sm rounded-3xl p-6 text-center border border-indigo-500/50 shadow-[0_0_50px_rgba(99,102,241,0.2)]">
+             <div class="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl text-indigo-400 animate-bounce"><i class="fas fa-bell"></i></div>
+             <h3 class="font-bold text-xl mb-2">{{ incomingRequest.senderName }}</h3>
+             <p class="text-gray-300 mb-6">يريد الرسم معك الآن!</p>
+             <div class="flex gap-3">
+                 <button @click="rejectPairing" class="flex-1 bg-white/10 text-white py-3 rounded-xl font-bold">رفض</button>
+                 <button @click="acceptPairing" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/40">قبول</button>
+             </div>
+         </div>
+    </div>
 
 </div> <!-- End #app -->
 
@@ -848,11 +938,11 @@
             return {
                 isLoading: true, isLoggingIn: false, user: null, userData: {}, onlineUsers: [], loginName: '', errorMsg: '',
                 mode: 'draw', 
-                currentView: 'home', // 'home', 'timeline', 'chat', 'canvas', 'profile'
+                currentView: 'home', 
                 showFriendModal: false, showInbox: false, showAdminModal: false, showSettingsModal: false, showMagicModal: false,
                 showAdminSetLockModal: false, adminTargetUser: null, showInfoModal: false, selectedUser: null,
                 viewingImage: null, viewingName: '', 
-                allMessages: [], // Contains all sent and received messages
+                allMessages: [], 
                 sending: false,
                 isDrawing: false, ctx: null, 
                 brushColor: '#ffffff', customColor: '#ffffff', brushSize: 5, isEraser: false, 
@@ -892,7 +982,7 @@
                 storyProgress: 0,
                 storyInterval: null,
                 loadingStory: false,
-                storyDuration: 5000, // 5s for images
+                storyDuration: 5000, 
                 
                 // Upload State
                 uploadProgress: 0,
@@ -909,21 +999,19 @@
             isAdmin() { return this.userData && this.userData.name === 'Saud'; },
             chatList() { return this.onlineUsers; },
             
-            // Home Feed: Shows only messages received by the current user
             homeFeedPosts() {
                 return this.allMessages
                     .filter(m => m.category === 'memory' && m.receiverId === this.user.uid)
                     .sort((a, b) => b.timestamp - a.timestamp);
             },
 
-            // Timeline Groups: Side-by-Side view of interactions
             timelineGroups() {
                 const groups = {};
                 const memories = this.allMessages.filter(m => m.category === 'memory');
                 
                 memories.forEach(m => {
                     const dateKey = new Date(m.timestamp).toDateString();
-                    if (!groups[dateKey]) groups[dateKey] = {}; // Keyed by partnerId
+                    if (!groups[dateKey]) groups[dateKey] = {}; 
 
                     const isMe = m.senderId === this.user.uid;
                     const partnerId = isMe ? m.receiverId : m.senderId;
@@ -942,7 +1030,6 @@
                     else groups[dateKey][partnerId].them = m;
                 });
 
-                // Convert to array and sort by date descending
                 return Object.keys(groups)
                     .sort((a,b) => new Date(b) - new Date(a))
                     .map(date => {
@@ -1050,14 +1137,11 @@
                         onSnapshot(doc(db, "users", user.uid), (docSnap) => { if (docSnap.exists()) { this.userData = docSnap.data(); if (this.userData.lockPattern && this.userData.lockPattern.length > 0) this.isAppLocked = true; } });
                         this.allMessages = [];
                         
-                        // Messages for Chat & Feed & Timeline (Both Sent and Received)
-                        // Query 1: Received Messages
                         const q1 = query(collection(db, "messages"), where("receiverId", "==", user.uid));
                         onSnapshot(q1, (snap) => { 
                             snap.docChanges().forEach(change => { 
                                 if (change.type === "added") {
                                     const data = change.doc.data();
-                                    // Enhance with sender info if available in onlineUsers
                                     const sender = this.onlineUsers.find(u => u.id === data.senderId) || { photoURL: null };
                                     this.allMessages.push({ 
                                         id: change.doc.id, 
@@ -1084,13 +1168,11 @@
                             }); 
                         });
 
-                        // Query 2: Sent Messages
                         const q2 = query(collection(db, "messages"), where("senderId", "==", user.uid));
                         onSnapshot(q2, (snap) => { 
                             snap.docChanges().forEach(change => { 
                                 if (change.type === "added" && !this.allMessages.find(m => m.id === change.doc.id)) { 
                                     const data = change.doc.data();
-                                    // For sent messages, userPhoto is MY photo
                                     this.allMessages.push({ 
                                         id: change.doc.id, 
                                         ...data,
@@ -1102,7 +1184,6 @@
                             }); 
                         });
                         
-                        // Listen for Stories
                         const storyQuery = query(collection(db, "stories"));
                         onSnapshot(storyQuery, (snap) => {
                             this.stories = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1145,9 +1226,7 @@
                 const { db, addDoc, collection, doc, onSnapshot, deleteDoc } = window.firebaseData; 
                 try { 
                     const linesToSend = options.shareCanvas ? JSON.parse(JSON.stringify(this.normalModeLines)) : [];
-                    
                     this.isCollaborationEnabled = options.enableSync;
-                    
                     const payload = { 
                         senderId: this.user.uid, 
                         senderName: this.userData.name, 
@@ -1180,8 +1259,6 @@
                             if (options.sessionDuration > 0) this.startTimer(options.sessionDuration);
                             setTimeout(() => { deleteDoc(doc(db, "pairing_requests", docRef.id)).catch(e=>{}); }, 1000); 
                             if(this.inviteListenerUnsub) { this.inviteListenerUnsub(); this.inviteListenerUnsub = null; } 
-                            
-                            // Auto switch to canvas on accept
                             this.switchView('canvas');
                         }
                     });
@@ -1201,12 +1278,9 @@
                 const incomingType = this.incomingRequest.activityType;
                 const incomingImage = this.incomingRequest.coloringImage;
                 const duration = this.incomingRequest.sessionDuration || 0;
-                
                 this.isCollaborationEnabled = this.incomingRequest.enableSync !== false; 
-
                 const rawLines = (this.incomingRequest.lines && Array.isArray(this.incomingRequest.lines)) ? this.incomingRequest.lines : [];
                 const initialLines = shareCanvas ? JSON.parse(JSON.stringify(rawLines)) : [];
-                
                 const { db, addDoc, collection, updateDoc, doc } = window.firebaseData; 
                 try {
                     if (incomingType === 'color' && incomingImage) {
@@ -1228,12 +1302,9 @@
                              this.localActionIds = [];
                         }
                     }
-                    
-                    this.switchView('canvas'); // Auto switch to canvas
-
+                    this.switchView('canvas'); 
                     await this.$nextTick(); 
                     this.initCanvas();
-                    
                     if (this.mode === 'draw' && initialLines.length > 0) { 
                         this.normalModeLines = initialLines; 
                         localStorage.setItem('universal_draw_normal_lines', JSON.stringify(this.normalModeLines)); 
@@ -1243,16 +1314,12 @@
                         this.refreshColoringCache();
                         this.redraw();
                     }
-                    
                     const sessionData = { users: [this.user.uid, senderId], lines: initialLines };
                     if (incomingImage) sessionData.coloringImage = incomingImage;
-
                     const sessionRef = await addDoc(collection(db, "sessions"), sessionData); 
                     await updateDoc(doc(db, "pairing_requests", reqId), { status: 'accepted', sessionId: sessionRef.id }); 
-                    
                     this.startSession(sessionRef.id, senderId, senderName);
                     if (duration > 0) this.startTimer(duration);
-
                 } catch (e) { console.error("Error accepting pairing:", e); this.showToast("حدث خطأ أثناء الاتصال"); } finally { this.incomingRequest = null; }
             },
 
@@ -1262,7 +1329,6 @@
             startTimer(seconds) {
                 if (this.sessionTimer.intervalId) clearInterval(this.sessionTimer.intervalId);
                 this.sessionTimer = { active: true, timeLeft: seconds, intervalId: null };
-                
                 this.sessionTimer.intervalId = setInterval(() => {
                     if (this.sessionTimer.timeLeft > 0) {
                         this.sessionTimer.timeLeft--;
@@ -1285,11 +1351,9 @@
                 onSnapshot(doc(db, "sessions", this.pairing.sessionId), (docSnap) => { 
                     if (docSnap.exists()) { 
                         const data = docSnap.data(); 
-                        
                         if (data.isGenerating !== undefined) {
                             this.isGeneratingAI = data.isGenerating;
                         }
-
                         const currentImage = data.coloringImage;
                         if (currentImage !== undefined) {
                             if (currentImage === null && this.coloringBaseImage !== null) {
@@ -1300,9 +1364,7 @@
                                 this.loadColoringImage(currentImage).then(() => this.redraw());
                             }
                         }
-
                         const lines = data.lines || []; 
-                        
                         if (this.mode === 'color') { 
                             this.coloringModeLines = lines; 
                             this.refreshColoringCache(); 
@@ -1312,7 +1374,6 @@
                         }
                         this.remoteProcessedLines = lines.length;
                         this.redraw();
-
                     } else { this.disconnectPairing(true); } 
                 }); 
             },
@@ -1320,24 +1381,18 @@
             redraw() {
                 const c = this.$refs.canvas;
                 if (!c || !this.ctx) return;
-                
                 this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-                // Redraw white background for canvas
                 this.ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
                 this.ctx.fillStyle = "#ffffff"; 
                 this.ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-
                 if (this.mode === 'color') {
                     if (this.coloringCanvas) { 
                         this.ctx.drawImage(this.coloringCanvas, 0, 0); 
                     }
-                    
                     this.ctx.save();
                     if (this.isDrawing && !this.isBucket && this.currentPath.length > 0) {
                         this.ctx.beginPath(); 
                         this.ctx.lineWidth = this.isEraser ? 25 : this.brushSize; 
-                        
                         if (this.isEraser) {
                             this.ctx.globalCompositeOperation = 'source-over';
                             this.ctx.strokeStyle = '#ffffff';
@@ -1345,7 +1400,6 @@
                             this.ctx.globalCompositeOperation = 'source-over';
                             this.ctx.strokeStyle = this.brushColor;
                         }
-
                         this.ctx.lineCap = 'round'; 
                         this.ctx.lineJoin = 'round';
                         this.ctx.moveTo(this.currentPath[0].x, this.currentPath[0].y); 
@@ -1353,22 +1407,18 @@
                         this.ctx.stroke();
                     }
                     this.ctx.restore();
-                    
                     if (this.activeColoringImageObj) {
                         this.ctx.save(); 
                         this.ctx.globalCompositeOperation = 'multiply'; 
                         this.ctx.drawImage(this.activeColoringImageObj, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT); 
                         this.ctx.restore();
                     }
-                    
                 } else {
                     this.ctx.save();
                     this.normalModeLines.forEach(line => this.drawRemoteLine(line));
-                    
                     if (this.isDrawing && this.currentPath.length > 0) {
                         this.ctx.beginPath(); 
                         this.ctx.lineWidth = this.isEraser ? 25 : this.brushSize; 
-                        
                         if (this.isEraser) {
                             this.ctx.globalCompositeOperation = 'destination-out';
                             this.ctx.strokeStyle = '#000000'; 
@@ -1376,7 +1426,6 @@
                             this.ctx.globalCompositeOperation = 'source-over';
                             this.ctx.strokeStyle = (this.customColor !== '#ffffff' && this.colors.indexOf(this.brushColor) === -1 ? this.customColor : this.brushColor);
                         }
-
                         this.ctx.lineCap = 'round'; 
                         this.ctx.lineJoin = 'round';
                         this.ctx.moveTo(this.currentPath[0].x, this.currentPath[0].y); 
@@ -1392,7 +1441,6 @@
                 this.ctx.lineWidth = line.width || 5; 
                 this.ctx.lineCap = 'round'; 
                 this.ctx.lineJoin = 'round';
-                
                 if (line.isEraser) {
                     this.ctx.globalCompositeOperation = 'destination-out';
                     this.ctx.strokeStyle = '#000000';
@@ -1400,17 +1448,14 @@
                     this.ctx.globalCompositeOperation = 'source-over';
                     this.ctx.strokeStyle = line.color; 
                 }
-
                 if (line.points && line.points.length > 0) { this.ctx.moveTo(line.points[0].x, line.points[0].y); for (let i = 1; i < line.points.length; i++) { this.ctx.lineTo(line.points[i].x, line.points[i].y); } } 
                 this.ctx.stroke(); 
             },
             disconnectPairing(remote = false) { 
                 if (!remote && this.pairing.sessionId) { const { db, doc, deleteDoc } = window.firebaseData; deleteDoc(doc(db, "sessions", this.pairing.sessionId)).catch(e => console.error(e)); } 
                 this.pairing = { isPaired: false, partnerId: null, partnerName: null, sessionId: null }; 
-                
                 if (this.sessionTimer.intervalId) clearInterval(this.sessionTimer.intervalId);
                 this.sessionTimer = { active: false, timeLeft: 0, intervalId: null };
-                
                 if (remote) this.showToast("تم قطع الاتصال من الطرف الآخر"); else this.showToast("تم إلغاء الاقتران"); 
             },
             toggleFullscreen() { this.isFullscreen = !this.isFullscreen; if (!this.isFullscreen) { this.resetView(); } this.$nextTick(() => { this.handleResize(); }); },
@@ -1419,18 +1464,13 @@
             getPointerPos(e) { 
                 const c = this.$refs.canvas;
                 if (!c) return { x: 0, y: 0 };
-                
                 const rect = c.getBoundingClientRect();
-                
                 const scaleX = LOGICAL_WIDTH / rect.width;
                 const scaleY = LOGICAL_HEIGHT / rect.height;
-                
                 const clientX = e.touches ? e.touches[0].clientX : e.clientX;
                 const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
                 const x = (clientX - rect.left) * scaleX;
                 const y = (clientY - rect.top) * scaleY;
-
                 return { x, y };
             },
 
@@ -1482,11 +1522,9 @@
                         points: this.currentPath 
                     };
                     const actionToSend = JSON.parse(JSON.stringify(newStroke));
-
                     this.redoStack = []; 
                     this.localActionIds.push(actionId);
                     if (this.localActionIds.length > 40) this.localActionIds.shift();
-
                     if (this.mode === 'color') { 
                         this.coloringModeLines.push(actionToSend); 
                         this.applyActionToCache(actionToSend); 
@@ -1496,12 +1534,10 @@
                             localStorage.setItem('universal_draw_normal_lines', JSON.stringify(this.normalModeLines)); 
                         } 
                     }
-                    
                     if (this.pairing.isPaired && this.isCollaborationEnabled) { 
                         const { db, doc, updateDoc, arrayUnion } = window.firebaseData; 
                         try { await updateDoc(doc(db, "sessions", this.pairing.sessionId), { lines: arrayUnion(actionToSend) }); } catch(e) { console.error("Sync error", e); } 
                     }
-                    
                     this.currentPath = []; this.redraw();
                 } 
             },
@@ -1530,7 +1566,6 @@
                 this.coloringBaseImage = null;
                 this.activeColoringImageObj = null;
                 this.redraw();
-                
                 if (this.pairing.isPaired) {
                     const { db, doc, updateDoc } = window.firebaseData;
                     await updateDoc(doc(db, "sessions", this.pairing.sessionId), { coloringImage: null });
@@ -1539,36 +1574,28 @@
             
             async generateColoringPage() {
                 if(!this.coloringPrompt.trim()) return;
-                
                 this.isGenerating = true; 
                 this.isGeneratingAI = true;
-
                 if (this.pairing.isPaired) {
                     const { db, doc, updateDoc } = window.firebaseData;
                     try {
                         await updateDoc(doc(db, "sessions", this.pairing.sessionId), { isGenerating: true });
                     } catch(e) { console.error("Sync start error", e); }
                 }
-
                 try {
                     const userText = this.coloringPrompt;
                     const magicPrompt = "detailed coloring book page of " + userText + ", intricate professional line art, thick clean outlines, high detail, realistic style, aesthetic, white background, no shading, no grayscale, vector quality, watertight paths for bucket fill";
-
                     const width = 1080;
                     const height = 1920;
                     const seed = Math.floor(Math.random() * 1000000);
-                    
                     const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(magicPrompt)}?width=${width}&height=${height}&nologo=true&private=true&model=flux&seed=${seed}`;
-
                     await this.loadColoringImage(imageUrl);
-                    
                     if (this.isGeneratingAI) { 
                         this.coloringModeLines = []; 
                         this.redoStack = []; 
                         this.localActionIds = [];
                         if(this.coloringCtx) this.coloringCtx.clearRect(0, 0, this.coloringCanvas.width, this.coloringCanvas.height); 
                         this.redraw(); 
-                        
                         if (this.pairing.isPaired) {
                             const { db, doc, updateDoc } = window.firebaseData;
                             await updateDoc(doc(db, "sessions", this.pairing.sessionId), { 
@@ -1576,13 +1603,11 @@
                                 isGenerating: false 
                             });
                         }
-
                         this.showToast("تم توليد الرسمة!", "fas fa-magic"); 
                     }
                 } catch (e) { 
                     console.error(e); 
                     if (this.isGeneratingAI) this.showToast("فشل التوليد: " + e.message);
-                    
                     if (this.pairing.isPaired) {
                         const { db, doc, updateDoc } = window.firebaseData;
                         updateDoc(doc(db, "sessions", this.pairing.sessionId), { isGenerating: false }).catch(e=>{});
@@ -1601,13 +1626,10 @@
             
             performFloodFill(virtX, virtY, hexColor, isReplay = false) {
                 if (!this.coloringCtx || !this.activeColoringImageObj) return;
-                
                 const startX = Math.floor(virtX); 
                 const startY = Math.floor(virtY);
-                
                 const w = this.coloringCanvas.width;
                 const h = this.coloringCanvas.height;
-                
                 const tempCvs = document.createElement('canvas'); tempCvs.width = w; tempCvs.height = h; const tCtx = tempCvs.getContext('2d');
                 tCtx.drawImage(this.coloringCanvas, 0, 0);
                 tCtx.save(); tCtx.globalCompositeOperation = 'multiply'; tCtx.drawImage(this.activeColoringImageObj, 0, 0, w, h); tCtx.restore();
@@ -1634,11 +1656,9 @@
                     const actionId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
                     const action = { id: actionId, type: 'fill', x: virtX, y: virtY, color: hexColor }; 
                     this.coloringModeLines.push(action);
-                    
                     this.redoStack = [];
                     this.localActionIds.push(actionId);
                     if (this.localActionIds.length > 40) this.localActionIds.shift();
-
                     if (this.pairing.isPaired && this.isCollaborationEnabled) { 
                         const { db, doc, updateDoc, arrayUnion } = window.firebaseData; 
                         updateDoc(doc(db, "sessions", this.pairing.sessionId), { lines: arrayUnion(action) }).catch(e=>console.error(e)); 
@@ -1650,23 +1670,18 @@
             async undo() {
                 const lines = this.mode === 'color' ? this.coloringModeLines : this.normalModeLines;
                 if (this.localActionIds.length === 0) return;
-
                 const lastActionId = this.localActionIds.pop();
                 const index = lines.findIndex(line => line.id === lastActionId);
-                
                 if (index !== -1) {
                     const item = lines.splice(index, 1)[0]; 
                     this.redoStack.push(item);
                     if (this.redoStack.length > 40) this.redoStack.shift();
-                    
                     if (this.mode === 'color') {
                         this.refreshColoringCache();
                     } else {
                         if (!this.pairing.isPaired) localStorage.setItem('universal_draw_normal_lines', JSON.stringify(this.normalModeLines));
                     }
-                    
                     this.redraw();
-                    
                     if (this.pairing.isPaired) {
                          this.syncUndoRemove(item); 
                     }
@@ -1677,16 +1692,13 @@
                 if (this.redoStack.length > 0) { 
                     const item = this.redoStack.pop(); 
                     const lines = this.mode === 'color' ? this.coloringModeLines : this.normalModeLines;
-                    
                     lines.push(item);
                     this.localActionIds.push(item.id);
-
                     if (this.mode === 'color') {
                          this.applyActionToCache(item); 
                     } else if (!this.pairing.isPaired) { 
                          localStorage.setItem('universal_draw_normal_lines', JSON.stringify(this.normalModeLines)); 
                     } 
-                    
                     this.redraw(); 
                     if (this.pairing.isPaired) this.syncRedoAdd(item); 
                 }
@@ -1706,9 +1718,7 @@
                     this.normalModeLines = [];
                     localStorage.removeItem('universal_draw_normal_lines');
                 }
-
                 this.redraw();
-
                 if (this.pairing.isPaired) {
                     const { db, doc, updateDoc } = window.firebaseData;
                     this.remoteProcessedLines = 0; 
@@ -1740,14 +1750,12 @@
                 } catch (e) { console.error(e); this.sending = false; this.showToast("فشل الإرسال"); } 
             },
             
-            // --- Social Feed Interactions ---
             async toggleLike(post) {
                 const { db, doc, updateDoc, arrayUnion, arrayRemove } = window.firebaseData;
                 const postRef = doc(db, "messages", post.id);
                 try {
                     if (post.isLiked) {
                         await updateDoc(postRef, { likes: arrayRemove(this.user.uid) });
-                        // Optimistic update
                         post.isLiked = false;
                         if (post.likes) post.likes = post.likes.filter(id => id !== this.user.uid);
                     } else {
@@ -1776,7 +1784,6 @@
                 } catch(e) { console.error(e); }
             },
             
-            // --- Story Methods ---
             triggerStoryUpload() { this.$refs.storyInput.click(); },
             
             async handleStoryUpload(e) {
@@ -1799,15 +1806,20 @@
                     
                     const storagePath = `stories/${this.user.uid}/${Date.now()}_${file.name}`;
                     const storageRef = sRef(storage, storagePath);
-                    const uploadTask = uploadBytesResumable(storageRef, file);
+                    // Added metadata to prevent 0% freeze issue with missing content-type
+                    const metadata = { contentType: file.type };
+                    const uploadTask = uploadBytesResumable(storageRef, file, metadata);
                     
                     uploadTask.on('state_changed',
                         (snapshot) => {
-                            this.uploadProgress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                            if (snapshot.totalBytes > 0) {
+                                this.uploadProgress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                                console.log('Upload is ' + this.uploadProgress + '% done');
+                            }
                         },
                         (error) => {
                             console.error("Story upload error:", error);
-                            this.showToast("فشل رفع القصة", "fas fa-times-circle");
+                            this.showToast("فشل رفع القصة: " + error.message, "fas fa-times-circle");
                             this.isUploadingStory = false;
                         },
                         async () => {
@@ -1845,14 +1857,9 @@
             getMyStoryStatusClass() {
                 const myId = this.user?.uid;
                 if (!myId || !this.stories) return '';
-                
                 const myStories = this.stories.filter(s => s.userId === myId);
-                // Filter expired
                 const activeStories = myStories.filter(s => s.timestamp > Date.now() - 24 * 60 * 60 * 1000);
-                
                 if (activeStories.length === 0) return '';
-                // Since I always view my own stories instantly, maybe differentiate if *I* uploaded recently?
-                // Standard behavior: colorful ring if I have active stories
                 return 'story-ring-new'; 
             },
             
@@ -1860,12 +1867,8 @@
                 if (!this.stories) return '';
                 const userStories = this.stories.filter(s => s.userId === userId);
                 const activeStories = userStories.filter(s => s.timestamp > Date.now() - 24 * 60 * 60 * 1000);
-                
                 if (activeStories.length === 0) return '';
-                
-                // Check if ALL active stories are viewed by me
                 const allViewed = activeStories.every(s => s.viewers && s.viewers.includes(this.user.uid));
-                
                 return allViewed ? 'story-ring-viewed' : 'story-ring-new';
             },
             
@@ -1905,15 +1908,9 @@
             startStoryTimer() {
                 clearInterval(this.storyInterval);
                 this.storyProgress = 0;
-                
-                // Get current story type
                 const story = this.currentStories[this.currentStoryIndex];
                 if (!story) { this.closeStoryViewer(); return; }
-                
-                // Mark as viewed
                 this.markStoryViewed(story);
-                
-                // If video, wait for load/play
                 if (story.type === 'video') {
                      this.loadingStory = true;
                      this.$nextTick(() => {
@@ -1923,16 +1920,12 @@
                                  this.loadingStory = false;
                                  video.play();
                              }
-                             // Video auto-advances on 'ended' event
                          }
                      });
                      return;
                 }
-                
-                // Image Timer
-                const tickRate = 50; // ms
+                const tickRate = 50; 
                 const step = 100 / (this.storyDuration / tickRate);
-                
                 this.storyInterval = setInterval(() => {
                     this.storyProgress += step;
                     if (this.storyProgress >= 100) {
@@ -1955,7 +1948,7 @@
                     this.currentStoryIndex--;
                     this.startStoryTimer();
                 } else {
-                    this.startStoryTimer(); // Restart current
+                    this.startStoryTimer(); 
                 }
             },
             
@@ -1972,7 +1965,6 @@
                      if (video) video.play();
                 } else {
                     this.startStoryTimer();
-                    // Retain current progress? Complex logic simplified by just restarting for MVP or calculating remaining
                 }
             },
             
@@ -1987,30 +1979,21 @@
             async deleteCurrentStory() {
                 const story = this.currentStories[this.currentStoryIndex];
                 if (!story) return;
-                
                 this.showConfirm("حذف القصة", "هل أنت متأكد من حذف هذه القصة؟", "fas fa-trash", async () => {
                     const { db, doc, deleteDoc, storage, sRef, deleteObject } = window.firebaseData;
                     try {
-                        // Delete from Storage first if path exists
                         if (story.storagePath) {
                             const fileRef = sRef(storage, story.storagePath);
                             try { await deleteObject(fileRef); } catch(e) { console.log("Storage delete error", e); }
                         }
-                        
-                        // Delete from Firestore
                         await deleteDoc(doc(db, "stories", story.id));
                         this.showToast("تم الحذف");
-                        
-                        // Navigation logic
                         if (this.currentStories.length <= 1) {
                             this.closeStoryViewer();
                         } else if (this.currentStoryIndex >= this.currentStories.length - 1) {
-                            // If it was the last one, close or go back? Usually close if empty for user
-                            // Re-eval currentStories will be handled by reactivity, but index might be out of bounds
-                            // Safe bet: close viewer to refresh state cleanly or move index back
                              this.closeStoryViewer();
                         } else {
-                            this.startStoryTimer(); // Go to next effectively
+                            this.startStoryTimer(); 
                         }
                     } catch(e) { console.error(e); this.showToast("فشل الحذف"); }
                 });
@@ -2024,7 +2007,6 @@
                 return `منذ ${mins} دقيقة`;
             },
             
-            // --- Profile Photo ---
             triggerProfileUpload() { this.$refs.profileInput.click(); },
             async handleProfileUpload(e) {
                 const file = e.target.files[0];
@@ -2036,21 +2018,17 @@
                          reader.onload = (e) => resolve(new Blob([e.target.result]));
                          reader.readAsArrayBuffer(file);
                     });
-                    
                     const url = await this.uploadToImgBB(blob);
-                    
                     const { db, doc, updateDoc } = window.firebaseData;
                     await updateDoc(doc(db, "users", this.user.uid), { photoURL: url });
-                    this.userData.photoURL = url; // Local update
+                    this.userData.photoURL = url; 
                     this.showToast("تم تحديث الصورة بنجاح");
                 } catch(e) { console.error(e); this.showToast("فشل التحديث"); }
             },
 
-            // --- Camera Trigger ---
             triggerCamera() {
                 this.switchMode('image');
                 this.switchView('canvas');
-                // Wait for view switch then trigger input
                 this.$nextTick(() => {
                     if (this.$refs.imageUploadInput) this.$refs.imageUploadInput.click();
                 });
