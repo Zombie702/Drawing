@@ -55,6 +55,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, addDoc, getDoc, updateDoc, deleteDoc, collection, onSnapshot, getDocs, query, where, orderBy, writeBatch, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCLO2HKD2HbdgdD85aCyHrijCotNx5hSbQ",
@@ -70,12 +71,14 @@
             const app = initializeApp(firebaseConfig);
             const auth = getAuth(app);
             const db = getFirestore(app);
+            const storage = getStorage(app);
             
             window.firebaseData = { 
-                auth, db, 
+                auth, db, storage,
                 doc, setDoc, addDoc, getDoc, updateDoc, deleteDoc, collection, onSnapshot, getDocs, query, where, orderBy, writeBatch, arrayUnion, arrayRemove,
                 createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile, 
-                onAuthStateChanged 
+                onAuthStateChanged,
+                sRef, uploadBytes, getDownloadURL
             };
         } catch (e) { console.error("Firebase Error:", e); }
     </script>
@@ -111,6 +114,16 @@
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(4px);
+        }
+        
+        /* Story Ring Gradients */
+        .story-ring-new {
+            background: conic-gradient(from 0deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+            padding: 3px;
+        }
+        .story-ring-viewed {
+            background: #4b5563; /* Gray-600 */
+            padding: 3px;
         }
         
         /* Letterbox Canvas Container */
@@ -214,6 +227,19 @@
             color: #fff;
             opacity: 1;
         }
+        
+        /* Story Progress Bar */
+        .story-progress-bar {
+            height: 2px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .story-progress-fill {
+            height: 100%;
+            background: white;
+            transition: width 0.1s linear;
+        }
 
         .custom-scroll::-webkit-scrollbar { width: 4px; }
         .custom-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
@@ -276,17 +302,25 @@
     <template v-else-if="user">
         
         <!-- --- HOME PAGE (Feed) --- -->
-        <div v-if="currentView === 'home'" class="flex-1 overflow-y-auto p-4 pb-24 custom-scroll relative z-10">
+        <div v-if="currentView === 'home' || currentView === 'memories'" class="flex-1 overflow-y-auto p-4 pb-24 custom-scroll relative z-10">
             <!-- Header -->
             <header class="flex justify-between items-center mb-6 px-2">
-                <h1 class="text-2xl font-black text-white flex items-center gap-2">
-                    <span class="bg-clip-text text-transparent bg-gradient-to-l from-indigo-400 to-purple-500">Universal</span>
-                    <i class="fas fa-bolt text-yellow-400"></i>
-                </h1>
+                <div class="flex items-center gap-2" @click="viewMyStories">
+                    <!-- My Profile Ring with Story Indicator -->
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center p-[2px] cursor-pointer" :class="getMyStoryStatusClass()">
+                        <div class="w-full h-full rounded-full bg-[#1e293b] flex items-center justify-center overflow-hidden border-2 border-[#0f172a]">
+                             <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover">
+                             <span v-else>{{ userData.name?.charAt(0) }}</span>
+                        </div>
+                    </div>
+                    <h1 class="text-2xl font-black text-white">Universal <i class="fas fa-bolt text-yellow-400"></i></h1>
+                </div>
+                
                 <div class="flex items-center gap-3">
-                     <!-- Memories/Feed Icon (Now redundant as we are on home, but kept for visual balance or refresh) -->
-                     <button @click="switchView('home')" class="w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/10 transition border border-white/10">
-                        <i class="fas fa-home"></i>
+                     <!-- Memories Grid Toggle -->
+                     <button @click="toggleMemoriesView" class="w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/10 transition border border-white/10 relative">
+                        <i class="fas" :class="currentView === 'memories' ? 'fa-stream' : 'fa-th'"></i>
+                        <span v-if="currentView !== 'memories'" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-[#0f172a]" v-show="memoryFeed.length > 0"></span>
                     </button>
                 </div>
             </header>
@@ -295,31 +329,34 @@
             <div class="mb-6">
                  <div class="flex gap-4 overflow-x-auto pb-2 scrollbar-hide px-2">
                     <!-- My Story (Add) -->
-                    <div class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group" @click="triggerCamera">
+                    <div class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group" @click="triggerStoryUpload">
                         <div class="w-16 h-16 rounded-full glass border-2 border-dashed border-indigo-400 flex items-center justify-center text-indigo-400 relative">
                              <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full rounded-full object-cover opacity-50">
-                             <i class="fas fa-plus text-xl absolute z-10"></i>
+                             <i class="fas fa-plus text-xl absolute z-10 bg-indigo-600 text-white rounded-full p-1 border-2 border-[#0f172a]"></i>
                         </div>
                         <span class="text-xs font-bold text-indigo-300">قصتي</span>
+                        <input type="file" ref="storyInput" @change="handleStoryUpload" accept="image/*,video/*" class="hidden">
                     </div>
 
                     <!-- Friend Stories -->
-                    <div v-for="u in onlineUsers" :key="u.id" @click="openSessionSetup(u)" class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group">
-                        <div class="w-16 h-16 rounded-full glass border-2 border-transparent group-hover:border-indigo-500 transition overflow-hidden relative p-[2px] bg-gradient-to-tr from-indigo-500 to-purple-500">
-                             <div class="w-full h-full rounded-full bg-black overflow-hidden relative">
+                    <div v-for="u in onlineUsers" :key="u.id" class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group">
+                        <!-- Friend Avatar with Online Dot Fix & Story Ring -->
+                        <div class="relative w-16 h-16 rounded-full p-[2px]" :class="getStoryRingClass(u.id)" @click="viewFriendStory(u)">
+                             <div class="w-full h-full rounded-full bg-black overflow-hidden relative border-2 border-[#0f172a]">
                                 <img v-if="u.photoURL" :src="u.photoURL" class="w-full h-full object-cover">
                                 <span v-else class="w-full h-full flex items-center justify-center font-bold text-lg">{{ u.name.charAt(0) }}</span>
                              </div>
-                            <div class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#0f172a]" 
-                                 :class="isUserOnline(u) ? 'bg-green-500' : 'bg-gray-500'"></div>
+                             <!-- Fixed Online Dot (Outside overflow-hidden) -->
+                             <div class="absolute bottom-1 right-0 w-3 h-3 rounded-full border-2 border-[#0f172a] z-10" 
+                                  :class="isUserOnline(u) ? 'bg-green-500' : 'bg-gray-500'"></div>
                         </div>
                         <span class="text-xs text-gray-300 truncate w-full text-center">{{ u.name }}</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Social Feed -->
-            <div class="space-y-6">
+            <!-- Social Feed View -->
+            <div v-if="currentView === 'home'" class="space-y-6">
                  <div v-if="memoryFeed.length === 0" class="glass p-10 rounded-3xl text-center border border-white/5 mx-2">
                     <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                         <i class="fas fa-camera text-3xl text-gray-500"></i>
@@ -334,9 +371,11 @@
                     <!-- Post Header -->
                     <div class="p-4 flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center overflow-hidden border border-white/10">
-                                <img v-if="post.userPhoto" :src="post.userPhoto" class="w-full h-full object-cover">
-                                <span v-else class="text-indigo-300 font-bold">{{ post.senderName.charAt(0) }}</span>
+                            <div class="relative w-10 h-10">
+                                <div class="w-full h-full rounded-full bg-indigo-500/20 flex items-center justify-center overflow-hidden border border-white/10">
+                                    <img v-if="post.userPhoto" :src="post.userPhoto" class="w-full h-full object-cover">
+                                    <span v-else class="text-indigo-300 font-bold">{{ post.senderName.charAt(0) }}</span>
+                                </div>
                             </div>
                             <div>
                                 <h4 class="font-bold text-sm text-white">{{ post.senderName }}</h4>
@@ -383,17 +422,30 @@
                     </div>
                  </div>
             </div>
+
+            <!-- Memories Grid View -->
+            <div v-if="currentView === 'memories'" class="grid grid-cols-3 gap-1 animate-fade">
+                <div v-for="post in memoryFeed" :key="post.id" class="aspect-square bg-white/5 relative group cursor-pointer overflow-hidden" @click="viewImage(post.imageUrl, post.senderName)">
+                    <img :src="post.imageUrl" class="w-full h-full object-cover transition duration-300 group-hover:scale-110">
+                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2 text-white font-bold">
+                        <span><i class="fas fa-heart"></i> {{ post.likes?.length || 0 }}</span>
+                    </div>
+                </div>
+                 <div v-if="memoryFeed.length === 0" class="col-span-3 text-center py-20 text-gray-500">
+                    <p>لا توجد ذكريات في التقويم</p>
+                </div>
+            </div>
         </div>
 
         <!-- --- CANVAS PAGE --- -->
         <div v-show="currentView === 'canvas'" class="flex-1 flex flex-col h-full relative z-10">
             <!-- Canvas Header -->
             <div class="absolute top-0 left-0 w-full p-4 flex justify-between items-start z-[50] pointer-events-none">
-                 <!-- Mode Switcher -->
+                 <!-- Mode Switcher (Removed Image Button) -->
                 <div class="pointer-events-auto bg-black/60 backdrop-blur-md rounded-2xl p-1 flex gap-1 border border-white/10 shadow-lg">
                     <button @click="switchMode('draw')" :class="{'bg-indigo-600 text-white shadow': mode === 'draw', 'text-gray-400 hover:text-white': mode !== 'draw'}" class="px-4 py-2 rounded-xl text-sm font-bold transition">رسم</button>
                     <button @click="switchMode('color')" :class="{'bg-indigo-600 text-white shadow': mode === 'color', 'text-gray-400 hover:text-white': mode !== 'color'}" class="px-4 py-2 rounded-xl text-sm font-bold transition">تلوين</button>
-                    <button @click="switchMode('image')" :class="{'bg-indigo-600 text-white shadow': mode === 'image', 'text-gray-400 hover:text-white': mode !== 'image'}" class="px-4 py-2 rounded-xl text-sm font-bold transition">صورة</button>
+                    <!-- Image mode is now only accessible via bottom nav camera button -->
                 </div>
 
                 <!-- Session Status -->
@@ -593,7 +645,7 @@
 
         <!-- --- BOTTOM NAVIGATION --- -->
         <nav class="fixed bottom-0 left-0 w-full z-[5000] glass-heavy pb-safe pt-2 px-6 flex justify-between items-center h-[80px] rounded-t-3xl shadow-[0_-5px_20px_rgba(0,0,0,0.3)]">
-            <button @click="switchView('home')" class="nav-item flex flex-col items-center gap-1 transition-all duration-300 w-16" :class="{ 'active': currentView === 'home' }">
+            <button @click="switchView('home')" class="nav-item flex flex-col items-center gap-1 transition-all duration-300 w-16" :class="{ 'active': currentView === 'home' || currentView === 'memories' }">
                 <i class="fas fa-home text-xl text-gray-500 transition-colors duration-300"></i>
                 <span class="text-[10px] text-gray-500 font-bold opacity-0 transition-opacity duration-300">الرئيسية</span>
             </button>
@@ -620,6 +672,42 @@
         </nav>
 
         <!-- --- MODALS --- -->
+
+        <!-- Story Viewer Modal -->
+        <div v-if="showStoryViewer" class="fixed inset-0 z-[7000] bg-black flex flex-col">
+            <!-- Progress Bar -->
+            <div class="absolute top-0 left-0 w-full z-20 flex gap-1 p-2">
+                <div v-for="(story, index) in currentStories" :key="story.id" class="flex-1 story-progress-bar">
+                    <div class="story-progress-fill" :style="{ width: index < currentStoryIndex ? '100%' : (index === currentStoryIndex ? storyProgress + '%' : '0%') }"></div>
+                </div>
+            </div>
+
+            <!-- Header -->
+            <div class="absolute top-4 left-0 w-full z-20 flex justify-between items-center px-4 mt-2">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-full overflow-hidden border border-white">
+                        <img v-if="activeStoryUser.photoURL" :src="activeStoryUser.photoURL" class="w-full h-full object-cover">
+                         <span v-else class="w-full h-full bg-gray-500 flex items-center justify-center font-bold text-xs">{{ activeStoryUser.name?.charAt(0) }}</span>
+                    </div>
+                    <span class="font-bold text-sm text-shadow">{{ activeStoryUser.name }}</span>
+                    <span class="text-xs opacity-70">{{ getStoryTimeAgo(currentStories[currentStoryIndex]?.timestamp) }}</span>
+                </div>
+                <div class="flex gap-4">
+                     <button v-if="currentStories[currentStoryIndex]?.userId === user.uid" @click="deleteCurrentStory" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>
+                     <button @click="closeStoryViewer" class="text-white"><i class="fas fa-times text-xl"></i></button>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 flex items-center justify-center relative" @click="nextStory" @touchstart="pauseStory" @touchend="resumeStory">
+                <div v-if="loadingStory" class="absolute z-10 text-white"><i class="fas fa-spinner fa-spin text-3xl"></i></div>
+                <img v-if="currentStories[currentStoryIndex]?.type === 'image'" :src="currentStories[currentStoryIndex].url" class="max-w-full max-h-full object-contain">
+                <video v-if="currentStories[currentStoryIndex]?.type === 'video'" :src="currentStories[currentStoryIndex].url" autoplay playsinline class="max-w-full max-h-full object-contain" @ended="nextStory" ref="storyVideo"></video>
+                
+                <!-- Navigation Zones -->
+                <div class="absolute inset-y-0 left-0 w-1/4 z-10" @click.stop="prevStory"></div>
+            </div>
+        </div>
 
         <!-- Magic Wand Modal (AI Generation) -->
         <div v-if="showMagicModal" class="fixed inset-0 z-[5500] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -840,7 +928,17 @@
                 tempColor: '#ffffff',
                 picker: { h: 0, s: 0, v: 100, isDragging: false },
                 
-                isToolsCollapsed: false
+                isToolsCollapsed: false,
+                
+                // Story Features
+                stories: [],
+                showStoryViewer: false,
+                currentStoryIndex: 0,
+                activeStoryUser: null,
+                storyProgress: 0,
+                storyInterval: null,
+                loadingStory: false,
+                storyDuration: 5000, // 5s for images
             }
         },
         watch: {
@@ -873,6 +971,14 @@
                     else if (!isMe && !groups[date][friendId].them) groups[date][friendId].them = msg;
                 });
                 return groups;
+            },
+            currentStories() {
+                if (!this.activeStoryUser || !this.stories) return [];
+                // Filter expired stories (older than 24h)
+                const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+                return this.stories
+                    .filter(s => s.userId === this.activeStoryUser.id && s.timestamp > cutoff)
+                    .sort((a,b) => a.timestamp - b.timestamp);
             }
         },
         mounted() {
@@ -936,6 +1042,14 @@
                 }
             },
             
+            toggleMemoriesView() {
+                if (this.currentView === 'memories') {
+                    this.currentView = 'home';
+                } else {
+                    this.currentView = 'memories';
+                }
+            },
+            
             isUserOnline(u) {
                 // Check if lastSeen is within 5 minutes (300000 ms)
                 if (!u.lastSeen) return false;
@@ -977,6 +1091,12 @@
                             });
                             // Sort Newest First
                             this.memoryFeed = rawPosts.sort((a, b) => b.timestamp - a.timestamp);
+                        });
+                        
+                        // Listen for Stories
+                        const storyQuery = query(collection(db, "stories"));
+                        onSnapshot(storyQuery, (snap) => {
+                            this.stories = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         });
 
                         this.fetchOtherUsers();
@@ -1645,6 +1765,220 @@
                     if (!post.comments) post.comments = [];
                     post.comments.push(comment);
                 } catch(e) { console.error(e); }
+            },
+            
+            // --- Story Methods ---
+            triggerStoryUpload() { this.$refs.storyInput.click(); },
+            
+            async handleStoryUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const type = file.type.startsWith('video') ? 'video' : 'image';
+                const MAX_SIZE_MB = type === 'video' ? 50 : 10;
+                
+                if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+                    this.showToast(`حجم الملف كبير جداً. الحد الأقصى ${MAX_SIZE_MB} ميجابايت`, "fas fa-exclamation-triangle");
+                    return;
+                }
+                
+                this.showToast("جاري رفع القصة...", type === 'video' ? "fas fa-video" : "fas fa-image");
+                
+                try {
+                    let url;
+                    const { storage, sRef, uploadBytes, getDownloadURL, db, collection, addDoc } = window.firebaseData;
+                    
+                    // Use Firebase Storage for both Video and Image for Stories to handle larger files better
+                    const storagePath = `stories/${this.user.uid}/${Date.now()}_${file.name}`;
+                    const storageRef = sRef(storage, storagePath);
+                    await uploadBytes(storageRef, file);
+                    url = await getDownloadURL(storageRef);
+                    
+                    await addDoc(collection(db, "stories"), {
+                        userId: this.user.uid,
+                        userName: this.userData.name,
+                        userPhoto: this.userData.photoURL,
+                        type: type,
+                        url: url,
+                        timestamp: Date.now(),
+                        viewers: []
+                    });
+                    
+                    this.showToast("تم نشر القصة بنجاح!", "fas fa-check-circle");
+                } catch (e) {
+                    console.error("Story upload error:", e);
+                    this.showToast("فشل رفع القصة", "fas fa-times-circle");
+                }
+                
+                // Reset input
+                e.target.value = '';
+            },
+            
+            getMyStoryStatusClass() {
+                const myId = this.user?.uid;
+                if (!myId || !this.stories) return '';
+                
+                const myStories = this.stories.filter(s => s.userId === myId);
+                // Filter expired
+                const activeStories = myStories.filter(s => s.timestamp > Date.now() - 24 * 60 * 60 * 1000);
+                
+                if (activeStories.length === 0) return '';
+                // Since I always view my own stories instantly, maybe differentiate if *I* uploaded recently?
+                // Standard behavior: colorful ring if I have active stories
+                return 'story-ring-new'; 
+            },
+            
+            getStoryRingClass(userId) {
+                if (!this.stories) return '';
+                const userStories = this.stories.filter(s => s.userId === userId);
+                const activeStories = userStories.filter(s => s.timestamp > Date.now() - 24 * 60 * 60 * 1000);
+                
+                if (activeStories.length === 0) return '';
+                
+                // Check if ALL active stories are viewed by me
+                const allViewed = activeStories.every(s => s.viewers && s.viewers.includes(this.user.uid));
+                
+                return allViewed ? 'story-ring-viewed' : 'story-ring-new';
+            },
+            
+            viewMyStories() {
+                if (!this.stories) return;
+                const hasStories = this.stories.some(s => s.userId === this.user.uid && s.timestamp > Date.now() - 24 * 60 * 60 * 1000);
+                if (hasStories) {
+                     this.activeStoryUser = { id: this.user.uid, name: this.userData.name, photoURL: this.userData.photoURL };
+                     this.openStoryViewer();
+                } else {
+                     this.triggerStoryUpload();
+                }
+            },
+            
+            viewFriendStory(u) {
+                const hasStories = this.stories.some(s => s.userId === u.id && s.timestamp > Date.now() - 24 * 60 * 60 * 1000);
+                if (hasStories) {
+                    this.activeStoryUser = u;
+                    this.openStoryViewer();
+                }
+            },
+            
+            openStoryViewer() {
+                this.currentStoryIndex = 0;
+                this.storyProgress = 0;
+                this.showStoryViewer = true;
+                this.startStoryTimer();
+            },
+            
+            closeStoryViewer() {
+                this.showStoryViewer = false;
+                this.activeStoryUser = null;
+                clearInterval(this.storyInterval);
+                this.storyInterval = null;
+            },
+            
+            startStoryTimer() {
+                clearInterval(this.storyInterval);
+                this.storyProgress = 0;
+                
+                // Get current story type
+                const story = this.currentStories[this.currentStoryIndex];
+                if (!story) { this.closeStoryViewer(); return; }
+                
+                // Mark as viewed
+                this.markStoryViewed(story);
+                
+                // If video, wait for load/play
+                if (story.type === 'video') {
+                     this.loadingStory = true;
+                     this.$nextTick(() => {
+                         const video = this.$refs.storyVideo;
+                         if (video) {
+                             video.oncanplay = () => {
+                                 this.loadingStory = false;
+                                 video.play();
+                             }
+                             // Video auto-advances on 'ended' event
+                         }
+                     });
+                     return;
+                }
+                
+                // Image Timer
+                const tickRate = 50; // ms
+                const step = 100 / (this.storyDuration / tickRate);
+                
+                this.storyInterval = setInterval(() => {
+                    this.storyProgress += step;
+                    if (this.storyProgress >= 100) {
+                        this.nextStory();
+                    }
+                }, tickRate);
+            },
+            
+            nextStory() {
+                if (this.currentStoryIndex < this.currentStories.length - 1) {
+                    this.currentStoryIndex++;
+                    this.startStoryTimer();
+                } else {
+                    this.closeStoryViewer();
+                }
+            },
+            
+            prevStory() {
+                if (this.currentStoryIndex > 0) {
+                    this.currentStoryIndex--;
+                    this.startStoryTimer();
+                } else {
+                    this.startStoryTimer(); // Restart current
+                }
+            },
+            
+            pauseStory() {
+                clearInterval(this.storyInterval);
+                 const video = this.$refs.storyVideo;
+                 if (video) video.pause();
+            },
+            
+            resumeStory() {
+                const story = this.currentStories[this.currentStoryIndex];
+                if (story.type === 'video') {
+                     const video = this.$refs.storyVideo;
+                     if (video) video.play();
+                } else {
+                    this.startStoryTimer();
+                    // Retain current progress? Complex logic simplified by just restarting for MVP or calculating remaining
+                }
+            },
+            
+            async markStoryViewed(story) {
+                if (story.viewers && story.viewers.includes(this.user.uid)) return;
+                const { db, doc, updateDoc, arrayUnion } = window.firebaseData;
+                try {
+                    await updateDoc(doc(db, "stories", story.id), { viewers: arrayUnion(this.user.uid) });
+                } catch(e) { console.error(e); }
+            },
+            
+            async deleteCurrentStory() {
+                const story = this.currentStories[this.currentStoryIndex];
+                if (!story) return;
+                
+                this.showConfirm("حذف القصة", "هل أنت متأكد من حذف هذه القصة؟", "fas fa-trash", async () => {
+                    const { db, doc, deleteDoc } = window.firebaseData;
+                    try {
+                        await deleteDoc(doc(db, "stories", story.id));
+                        this.showToast("تم الحذف");
+                        // If it was the only story, close viewer
+                        if (this.currentStories.length <= 1) this.closeStoryViewer();
+                        else if (this.currentStoryIndex >= this.currentStories.length - 1) this.closeStoryViewer();
+                        else this.startStoryTimer(); // Go to next effectively
+                    } catch(e) { console.error(e); }
+                });
+            },
+            
+            getStoryTimeAgo(timestamp) {
+                const diff = Date.now() - timestamp;
+                const hrs = Math.floor(diff / (1000 * 60 * 60));
+                if (hrs > 0) return `منذ ${hrs} ساعة`;
+                const mins = Math.floor(diff / (1000 * 60));
+                return `منذ ${mins} دقيقة`;
             },
             
             // --- Profile Photo ---
