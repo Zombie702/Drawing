@@ -55,7 +55,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, addDoc, getDoc, updateDoc, deleteDoc, collection, onSnapshot, getDocs, query, where, orderBy, writeBatch, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+        import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCLO2HKD2HbdgdD85aCyHrijCotNx5hSbQ",
@@ -78,7 +78,7 @@
                 doc, setDoc, addDoc, getDoc, updateDoc, deleteDoc, collection, onSnapshot, getDocs, query, where, orderBy, writeBatch, arrayUnion, arrayRemove,
                 createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile, 
                 onAuthStateChanged,
-                sRef, uploadBytes, getDownloadURL
+                sRef, uploadBytes, getDownloadURL, deleteObject
             };
         } catch (e) { console.error("Firebase Error:", e); }
     </script>
@@ -335,8 +335,8 @@
                                  <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover opacity-80">
                                  <div v-else class="w-full h-full flex items-center justify-center font-bold">{{ userData.name?.charAt(0) }}</div>
                              </div>
-                             <!-- Small Plus Button -->
-                             <div class="absolute bottom-0 right-0 bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center border-2 border-[#0f172a] text-white text-[10px] z-20">
+                             <!-- Small Plus Button: Show ONLY if NO active story -->
+                             <div v-if="!hasActiveStory" class="absolute bottom-0 right-0 bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center border-2 border-[#0f172a] text-white text-[10px] z-20">
                                 <i class="fas fa-plus"></i>
                              </div>
                         </div>
@@ -608,117 +608,6 @@
             </div>
         </div>
 
-        <!-- --- CHAT PAGE --- -->
-        <div v-if="currentView === 'chat'" class="flex-1 flex flex-col h-full overflow-hidden relative z-10 bg-[#0f172a]">
-             <div v-if="!selectedChatFriend" class="p-4 overflow-y-auto h-full pb-24">
-                <h2 class="text-2xl font-bold mb-6 px-2">الرسائل والمحادثات</h2>
-                <div v-if="chatList.length === 0" class="text-center py-20 opacity-50"><i class="fas fa-comment-slash text-4xl mb-2"></i><p>لا يوجد أصدقاء متصلين</p></div>
-                <div class="grid gap-3">
-                     <div v-for="friend in chatList" :key="friend.id" @click="selectChatFriend(friend)" class="glass p-4 rounded-xl flex items-center gap-4 cursor-pointer hover:bg-white/10 transition group border border-white/5">
-                         <div class="w-14 h-14 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-300 font-bold text-xl border border-indigo-500/30 group-hover:border-indigo-500 transition overflow-hidden">
-                             <img v-if="friend.photoURL" :src="friend.photoURL" class="w-full h-full object-cover">
-                             <span v-else>{{ friend.name.charAt(0) }}</span>
-                         </div>
-                         <div class="flex-1">
-                             <h3 class="font-bold text-lg text-white">{{ friend.name }}</h3>
-                             <p class="text-xs text-gray-400">اضغط للمراسلة...</p>
-                         </div>
-                         <i class="fas fa-chevron-left text-gray-500 group-hover:text-indigo-400 transition"></i>
-                     </div>
-                </div>
-            </div>
-            <div v-else class="flex flex-col h-full pb-20">
-                <header class="glass-heavy p-4 flex items-center gap-4 shrink-0 z-20">
-                    <button @click="selectedChatFriend = null" class="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center transition"><i class="fas fa-arrow-right"></i></button>
-                    <div class="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center font-bold overflow-hidden">
-                         <img v-if="selectedChatFriend.photoURL" :src="selectedChatFriend.photoURL" class="w-full h-full object-cover">
-                         <span v-else>{{ selectedChatFriend.name.charAt(0) }}</span>
-                    </div>
-                    <h3 class="font-bold text-lg">{{ selectedChatFriend.name }}</h3>
-                </header>
-                <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scroll" ref="chatContainer">
-                    <div v-for="msg in currentChatMessages" :key="msg.id" class="flex flex-col w-full" :class="msg.senderId === user.uid ? 'items-end' : 'items-start'">
-                        <div class="max-w-[75%] rounded-2xl overflow-hidden shadow-lg border border-white/10" :class="msg.senderId === user.uid ? 'bg-indigo-600 rounded-br-none' : 'bg-gray-700 rounded-bl-none'">
-                            <img :src="msg.imageUrl" @click="viewImage(msg.imageUrl, msg.senderId === user.uid ? 'أنت' : selectedChatFriend.name)" class="w-full h-auto object-cover max-h-80 min-w-[150px] bg-black/20 cursor-pointer">
-                        </div>
-                        <span class="text-[10px] text-gray-400 mt-1 mx-1">{{ new Date(msg.timestamp).toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}) }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- --- PROFILE PAGE --- -->
-        <div v-if="currentView === 'profile'" class="flex-1 overflow-y-auto p-6 pb-24 custom-scroll relative z-10">
-             
-            <!-- Profile Header with Settings Button -->
-            <div class="flex justify-between items-center mb-6">
-                 <h1 class="text-3xl font-bold">الملف الشخصي</h1>
-                 <button @click="openSettings" class="w-12 h-12 rounded-full glass flex items-center justify-center text-blue-400 hover:bg-white/10 transition border border-white/10">
-                    <i class="fas fa-cog text-xl"></i>
-                </button>
-            </div>
-
-            <div class="flex flex-col items-center mb-8">
-                <div class="w-32 h-32 rounded-full bg-gradient-to-tr from-indigo-500 to-pink-500 p-1 mb-3 shadow-[0_0_30px_rgba(99,102,241,0.3)] relative group">
-                    <div class="w-full h-full rounded-full bg-[#1e293b] flex items-center justify-center text-3xl font-bold overflow-hidden relative">
-                         <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover">
-                         <span v-else>{{ userData.name?.charAt(0) }}</span>
-                         
-                         <!-- Edit Photo Overlay -->
-                         <div @click="triggerProfileUpload" class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer">
-                             <i class="fas fa-camera text-white text-2xl"></i>
-                         </div>
-                    </div>
-                    <input type="file" ref="profileInput" @change="handleProfileUpload" accept="image/*" class="hidden">
-                </div>
-                <h2 class="text-2xl font-bold">{{ userData.name }}</h2>
-                <p class="text-gray-400 text-sm">{{ userData.email }}</p>
-                <div class="mt-2 bg-white/5 px-3 py-1 rounded-full text-xs text-gray-400 border border-white/5">{{ getDeviceInfo() }}</div>
-            </div>
-
-            <!-- Stats Grid -->
-             <div class="grid grid-cols-2 gap-4 mb-8">
-                 <div class="glass p-4 rounded-xl text-center border border-white/10">
-                     <i class="fas fa-fire text-orange-400 text-2xl mb-2"></i>
-                     <p class="text-2xl font-bold text-white">{{ userData.streak || 0 }}</p>
-                     <p class="text-xs text-gray-400">ستريك</p>
-                 </div>
-                 <div class="glass p-4 rounded-xl text-center border border-white/10">
-                     <i class="fas fa-star text-yellow-400 text-2xl mb-2"></i>
-                     <p class="text-2xl font-bold text-white">{{ userData.dailyRating?.stars || 0 }}</p>
-                     <p class="text-xs text-gray-400">تقييم اليوم</p>
-                 </div>
-             </div>
-        </div>
-
-        <!-- --- BOTTOM NAVIGATION --- -->
-        <nav class="fixed bottom-0 left-0 w-full z-[5000] glass-heavy pb-safe pt-2 px-6 flex justify-between items-center h-[80px] rounded-t-3xl shadow-[0_-5px_20px_rgba(0,0,0,0.3)]">
-            <button @click="switchView('home')" class="nav-item flex flex-col items-center gap-1 transition-all duration-300 w-16" :class="{ 'active': currentView === 'home' || currentView === 'timeline' }">
-                <i class="fas fa-home text-xl text-gray-500 transition-colors duration-300"></i>
-                <span class="text-[10px] text-gray-500 font-bold opacity-0 transition-opacity duration-300">الرئيسية</span>
-            </button>
-            
-            <button @click="switchView('chat')" class="nav-item flex flex-col items-center gap-1 transition-all duration-300 w-16" :class="{ 'active': currentView === 'chat' }">
-                <i class="fas fa-comments text-xl text-gray-500 transition-colors duration-300"></i>
-                <span class="text-[10px] text-gray-500 font-bold opacity-0 transition-opacity duration-300">شات</span>
-            </button>
-
-            <!-- Camera Button (New Feature) -->
-             <button @click="triggerCamera" class="relative -top-8 w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-[0_10px_20px_rgba(99,102,241,0.5)] border-4 border-[#0f172a] transform transition hover:scale-105 active:scale-95">
-                <i class="fas fa-camera text-white text-2xl"></i>
-            </button>
-
-            <button @click="switchView('canvas')" class="nav-item flex flex-col items-center gap-1 transition-all duration-300 w-16" :class="{ 'active': currentView === 'canvas' }">
-                <i class="fas fa-paint-brush text-xl text-gray-500 transition-colors duration-300"></i>
-                <span class="text-[10px] text-gray-500 font-bold opacity-0 transition-opacity duration-300">رسم</span>
-            </button>
-
-            <button @click="switchView('profile')" class="nav-item flex flex-col items-center gap-1 transition-all duration-300 w-16" :class="{ 'active': currentView === 'profile' }">
-                <i class="fas fa-user text-xl text-gray-500 transition-colors duration-300"></i>
-                <span class="text-[10px] text-gray-500 font-bold opacity-0 transition-opacity duration-300">أنا</span>
-            </button>
-        </nav>
-
         <!-- --- MODALS --- -->
 
         <!-- Story Viewer Modal -->
@@ -733,6 +622,8 @@
             <!-- Header -->
             <div class="absolute top-4 left-0 w-full z-20 flex justify-between items-center px-4 mt-2">
                 <div class="flex items-center gap-2">
+                    <button v-if="currentStories[currentStoryIndex]?.userId === user.uid" @click="deleteCurrentStory" class="text-red-400 hover:text-red-600 mr-2"><i class="fas fa-trash"></i></button>
+                    
                     <div class="w-8 h-8 rounded-full overflow-hidden border border-white">
                         <img v-if="activeStoryUser.photoURL" :src="activeStoryUser.photoURL" class="w-full h-full object-cover">
                          <span v-else class="w-full h-full bg-gray-500 flex items-center justify-center font-bold text-xs">{{ activeStoryUser.name?.charAt(0) }}</span>
@@ -741,7 +632,6 @@
                     <span class="text-xs opacity-70">{{ getStoryTimeAgo(currentStories[currentStoryIndex]?.timestamp) }}</span>
                 </div>
                 <div class="flex gap-4">
-                     <button v-if="currentStories[currentStoryIndex]?.userId === user.uid" @click="deleteCurrentStory" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>
                      <button @click="closeStoryViewer" class="text-white"><i class="fas fa-times text-xl"></i></button>
                 </div>
             </div>
@@ -1057,6 +947,12 @@
                 return this.stories
                     .filter(s => s.userId === this.activeStoryUser.id && s.timestamp > cutoff)
                     .sort((a,b) => a.timestamp - b.timestamp);
+            },
+            
+            hasActiveStory() {
+                if (!this.user || !this.stories) return false;
+                const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+                return this.stories.some(s => s.userId === this.user.uid && s.timestamp > cutoff);
             }
         },
         mounted() {
@@ -1894,6 +1790,7 @@
                         userPhoto: this.userData.photoURL,
                         type: type,
                         url: url,
+                        storagePath: storagePath, // Save path for deletion
                         timestamp: Date.now(),
                         viewers: []
                     });
@@ -2055,15 +1952,30 @@
                 if (!story) return;
                 
                 this.showConfirm("حذف القصة", "هل أنت متأكد من حذف هذه القصة؟", "fas fa-trash", async () => {
-                    const { db, doc, deleteDoc } = window.firebaseData;
+                    const { db, doc, deleteDoc, storage, sRef, deleteObject } = window.firebaseData;
                     try {
+                        // Delete from Storage first if path exists
+                        if (story.storagePath) {
+                            const fileRef = sRef(storage, story.storagePath);
+                            try { await deleteObject(fileRef); } catch(e) { console.log("Storage delete error", e); }
+                        }
+                        
+                        // Delete from Firestore
                         await deleteDoc(doc(db, "stories", story.id));
                         this.showToast("تم الحذف");
-                        // If it was the only story, close viewer
-                        if (this.currentStories.length <= 1) this.closeStoryViewer();
-                        else if (this.currentStoryIndex >= this.currentStories.length - 1) this.closeStoryViewer();
-                        else this.startStoryTimer(); // Go to next effectively
-                    } catch(e) { console.error(e); }
+                        
+                        // Navigation logic
+                        if (this.currentStories.length <= 1) {
+                            this.closeStoryViewer();
+                        } else if (this.currentStoryIndex >= this.currentStories.length - 1) {
+                            // If it was the last one, close or go back? Usually close if empty for user
+                            // Re-eval currentStories will be handled by reactivity, but index might be out of bounds
+                            // Safe bet: close viewer to refresh state cleanly or move index back
+                             this.closeStoryViewer();
+                        } else {
+                            this.startStoryTimer(); // Go to next effectively
+                        }
+                    } catch(e) { console.error(e); this.showToast("فشل الحذف"); }
                 });
             },
             
