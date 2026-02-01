@@ -302,7 +302,7 @@
     <template v-else-if="user">
         
         <!-- --- HOME PAGE (Feed) --- -->
-        <div v-if="currentView === 'home' || currentView === 'memories'" class="flex-1 overflow-y-auto p-4 pb-24 custom-scroll relative z-10">
+        <div v-if="currentView === 'home' || currentView === 'timeline'" class="flex-1 overflow-y-auto p-4 pb-24 custom-scroll relative z-10">
             <!-- Header -->
             <header class="flex justify-between items-center mb-6 px-2">
                 <div class="flex items-center gap-2" @click="viewMyStories">
@@ -317,10 +317,9 @@
                 </div>
                 
                 <div class="flex items-center gap-3">
-                     <!-- Memories Grid Toggle -->
-                     <button @click="toggleMemoriesView" class="w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/10 transition border border-white/10 relative">
-                        <i class="fas" :class="currentView === 'memories' ? 'fa-stream' : 'fa-th'"></i>
-                        <span v-if="currentView !== 'memories'" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-[#0f172a]" v-show="memoryFeed.length > 0"></span>
+                     <!-- Timeline/Feed Toggle -->
+                     <button @click="currentView = currentView === 'timeline' ? 'home' : 'timeline'" class="w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/10 transition border border-white/10 relative">
+                        <i class="fas" :class="currentView === 'timeline' ? 'fa-home' : 'fa-calendar-alt'"></i>
                     </button>
                 </div>
             </header>
@@ -329,10 +328,17 @@
             <div class="mb-6">
                  <div class="flex gap-4 overflow-x-auto pb-2 scrollbar-hide px-2">
                     <!-- My Story (Add) -->
-                    <div class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group" @click="triggerStoryUpload">
-                        <div class="w-16 h-16 rounded-full glass border-2 border-dashed border-indigo-400 flex items-center justify-center text-indigo-400 relative">
-                             <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full rounded-full object-cover opacity-50">
-                             <i class="fas fa-plus text-xl absolute z-10 bg-indigo-600 text-white rounded-full p-1 border-2 border-[#0f172a]"></i>
+                    <div class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group" @click="viewMyStories">
+                        <!-- My Story Avatar & Ring -->
+                        <div class="relative w-16 h-16 rounded-full p-[2px]" :class="getMyStoryStatusClass()">
+                             <div class="w-full h-full rounded-full glass border-2 border-dashed border-indigo-400 flex items-center justify-center text-indigo-400 relative overflow-hidden">
+                                 <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover opacity-80">
+                                 <div v-else class="w-full h-full flex items-center justify-center font-bold">{{ userData.name?.charAt(0) }}</div>
+                             </div>
+                             <!-- Small Plus Button -->
+                             <div class="absolute bottom-0 right-0 bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center border-2 border-[#0f172a] text-white text-[10px] z-20">
+                                <i class="fas fa-plus"></i>
+                             </div>
                         </div>
                         <span class="text-xs font-bold text-indigo-300">قصتي</span>
                         <input type="file" ref="storyInput" @change="handleStoryUpload" accept="image/*,video/*" class="hidden">
@@ -355,19 +361,19 @@
                 </div>
             </div>
 
-            <!-- Social Feed View -->
+            <!-- Social Feed View (Targeted: Only Received Messages) -->
             <div v-if="currentView === 'home'" class="space-y-6">
-                 <div v-if="memoryFeed.length === 0" class="glass p-10 rounded-3xl text-center border border-white/5 mx-2">
+                 <div v-if="homeFeedPosts.length === 0" class="glass p-10 rounded-3xl text-center border border-white/5 mx-2">
                     <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                        <i class="fas fa-camera text-3xl text-gray-500"></i>
+                        <i class="fas fa-inbox text-3xl text-gray-500"></i>
                     </div>
-                    <h3 class="font-bold text-lg text-white mb-2">لا توجد منشورات</h3>
-                    <p class="text-sm text-gray-400">كن أول من يشارك رسمة أو صورة مع الأصدقاء!</p>
-                    <button @click="triggerCamera" class="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-full font-bold text-sm">إضافة منشور</button>
+                    <h3 class="font-bold text-lg text-white mb-2">صندوق الذكريات فارغ</h3>
+                    <p class="text-sm text-gray-400">ستظهر هنا الذكريات التي يرسلها لك الأصدقاء.</p>
+                    <button @click="triggerCamera" class="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-full font-bold text-sm">إرسال لصديق</button>
                  </div>
 
                  <!-- Post Card -->
-                 <div v-for="post in memoryFeed" :key="post.id" class="glass rounded-3xl overflow-hidden border border-white/5 shadow-xl mx-2">
+                 <div v-for="post in homeFeedPosts" :key="post.id" class="glass rounded-3xl overflow-hidden border border-white/5 shadow-xl mx-2">
                     <!-- Post Header -->
                     <div class="p-4 flex items-center justify-between">
                         <div class="flex items-center gap-3">
@@ -423,16 +429,58 @@
                  </div>
             </div>
 
-            <!-- Memories Grid View -->
-            <div v-if="currentView === 'memories'" class="grid grid-cols-3 gap-1 animate-fade">
-                <div v-for="post in memoryFeed" :key="post.id" class="aspect-square bg-white/5 relative group cursor-pointer overflow-hidden" @click="viewImage(post.imageUrl, post.senderName)">
-                    <img :src="post.imageUrl" class="w-full h-full object-cover transition duration-300 group-hover:scale-110">
-                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2 text-white font-bold">
-                        <span><i class="fas fa-heart"></i> {{ post.likes?.length || 0 }}</span>
+            <!-- Timeline View (Side-by-Side) -->
+            <div v-if="currentView === 'timeline'" class="animate-fade pb-10">
+                <h2 class="text-center text-xl font-bold mb-6 text-white">الجدول الزمني المشترك</h2>
+                
+                <div v-for="group in timelineGroups" :key="group.date" class="mb-8">
+                    <h3 class="sticky top-0 bg-[#0f172a]/90 backdrop-blur z-20 py-2 px-4 text-sm font-bold text-gray-400 mb-4 border-b border-white/5 w-full flex items-center justify-between">
+                        <span><i class="far fa-calendar-alt ml-2"></i> {{ formatDateHeader(group.date) }}</span>
+                        <span class="text-xs font-normal bg-white/10 px-2 py-1 rounded-full">{{ group.pairs.length }} ثنائي</span>
+                    </h3>
+                    
+                    <div v-for="(pair, idx) in group.pairs" :key="idx" class="mb-8 px-2">
+                        <div class="flex items-center justify-center gap-2 mb-3">
+                             <span class="text-sm font-bold text-white">أنا</span>
+                             <i class="fas fa-exchange-alt text-gray-500 text-xs"></i>
+                             <span class="text-sm font-bold text-white">{{ pair.partner.name }}</span>
+                        </div>
+                        
+                        <div class="flex gap-3 h-56">
+                            <!-- My Post (Right side in RTL) -->
+                            <div class="flex-1 rounded-2xl overflow-hidden bg-white/5 border border-white/10 relative group">
+                                <template v-if="pair.me">
+                                    <img :src="pair.me.imageUrl" class="w-full h-full object-cover transition duration-500 group-hover:scale-110" @click="viewImage(pair.me.imageUrl, 'أنا')">
+                                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+                                    <div class="absolute bottom-2 right-2 text-xs font-bold text-white"><i class="fas fa-user-circle"></i> أنا</div>
+                                    <div class="absolute bottom-2 left-2 text-xs text-gray-300"><i class="fas fa-heart text-red-500"></i> {{ pair.me.likes?.length || 0 }}</div>
+                                </template>
+                                <div v-else class="w-full h-full flex items-center justify-center text-gray-500 text-xs flex-col gap-2 bg-black/20">
+                                    <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center"><i class="fas fa-ghost text-xl opacity-50"></i></div>
+                                    <span>لم ترسل</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Their Post (Left side in RTL) -->
+                            <div class="flex-1 rounded-2xl overflow-hidden bg-white/5 border border-white/10 relative group">
+                                <template v-if="pair.them">
+                                    <img :src="pair.them.imageUrl" class="w-full h-full object-cover transition duration-500 group-hover:scale-110" @click="viewImage(pair.them.imageUrl, pair.partner.name)">
+                                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+                                    <div class="absolute bottom-2 right-2 text-xs font-bold text-white"><i class="fas fa-user"></i> {{ pair.partner.name }}</div>
+                                    <div class="absolute bottom-2 left-2 text-xs text-gray-300"><i class="fas fa-heart text-red-500"></i> {{ pair.them.likes?.length || 0 }}</div>
+                                </template>
+                                <div v-else class="w-full h-full flex items-center justify-center text-gray-500 text-xs flex-col gap-2 bg-black/20">
+                                    <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center"><i class="fas fa-hourglass-half text-xl opacity-50"></i></div>
+                                    <span>لم يرسل</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                 <div v-if="memoryFeed.length === 0" class="col-span-3 text-center py-20 text-gray-500">
-                    <p>لا توجد ذكريات في التقويم</p>
+                
+                <div v-if="timelineGroups.length === 0" class="text-center py-20 text-gray-500">
+                    <i class="fas fa-history text-4xl mb-3 opacity-30"></i>
+                    <p>لا توجد ذكريات مشتركة في التقويم</p>
                 </div>
             </div>
         </div>
@@ -645,7 +693,7 @@
 
         <!-- --- BOTTOM NAVIGATION --- -->
         <nav class="fixed bottom-0 left-0 w-full z-[5000] glass-heavy pb-safe pt-2 px-6 flex justify-between items-center h-[80px] rounded-t-3xl shadow-[0_-5px_20px_rgba(0,0,0,0.3)]">
-            <button @click="switchView('home')" class="nav-item flex flex-col items-center gap-1 transition-all duration-300 w-16" :class="{ 'active': currentView === 'home' || currentView === 'memories' }">
+            <button @click="switchView('home')" class="nav-item flex flex-col items-center gap-1 transition-all duration-300 w-16" :class="{ 'active': currentView === 'home' || currentView === 'timeline' }">
                 <i class="fas fa-home text-xl text-gray-500 transition-colors duration-300"></i>
                 <span class="text-[10px] text-gray-500 font-bold opacity-0 transition-opacity duration-300">الرئيسية</span>
             </button>
@@ -895,11 +943,12 @@
             return {
                 isLoading: true, isLoggingIn: false, user: null, userData: {}, onlineUsers: [], loginName: '', errorMsg: '',
                 mode: 'draw', 
-                currentView: 'home', // Default view is now Home
+                currentView: 'home', // 'home', 'timeline', 'chat', 'canvas', 'profile'
                 showFriendModal: false, showInbox: false, showAdminModal: false, showSettingsModal: false, showMagicModal: false,
                 showAdminSetLockModal: false, adminTargetUser: null, showInfoModal: false, selectedUser: null,
                 viewingImage: null, viewingName: '', 
-                allMessages: [], memoryFeed: [], sending: false,
+                allMessages: [], // Contains all sent and received messages
+                sending: false,
                 isDrawing: false, ctx: null, 
                 brushColor: '#ffffff', customColor: '#ffffff', brushSize: 5, isEraser: false, 
                 uploadedImage: null,
@@ -950,31 +999,60 @@
             unreadCount() { return this.allMessages.filter(m => m.receiverId === this.user?.uid && !m.read && m.category !== 'chat').length; },
             isAdmin() { return this.userData && this.userData.name === 'Saud'; },
             chatList() { return this.onlineUsers; },
+            
+            // Home Feed: Shows only messages received by the current user
+            homeFeedPosts() {
+                return this.allMessages
+                    .filter(m => m.category === 'memory' && m.receiverId === this.user.uid)
+                    .sort((a, b) => b.timestamp - a.timestamp);
+            },
+
+            // Timeline Groups: Side-by-Side view of interactions
+            timelineGroups() {
+                const groups = {};
+                const memories = this.allMessages.filter(m => m.category === 'memory');
+                
+                memories.forEach(m => {
+                    const dateKey = new Date(m.timestamp).toDateString();
+                    if (!groups[dateKey]) groups[dateKey] = {}; // Keyed by partnerId
+
+                    const isMe = m.senderId === this.user.uid;
+                    const partnerId = isMe ? m.receiverId : m.senderId;
+                    
+                    const partner = this.onlineUsers.find(u => u.id === partnerId) || { name: m.senderName || 'Unknown', photoURL: null }; 
+
+                    if (!groups[dateKey][partnerId]) {
+                        groups[dateKey][partnerId] = {
+                            partner: partner,
+                            me: null,
+                            them: null
+                        };
+                    }
+
+                    if (isMe) groups[dateKey][partnerId].me = m;
+                    else groups[dateKey][partnerId].them = m;
+                });
+
+                // Convert to array and sort by date descending
+                return Object.keys(groups)
+                    .sort((a,b) => new Date(b) - new Date(a))
+                    .map(date => {
+                        return {
+                            date,
+                            pairs: Object.values(groups[date])
+                        };
+                    });
+            },
+
             currentChatMessages() {
                 if (!this.selectedChatFriend) return [];
                 const fid = this.selectedChatFriend.id;
                 const uid = this.user.uid;
                 return this.allMessages.filter(m => ((m.senderId === uid && m.receiverId === fid) || (m.senderId === fid && m.receiverId === uid)) && m.category === 'chat').sort((a,b) => a.timestamp - b.timestamp);
             },
-            historyGroups() {
-                // Keep for legacy view if needed, but primary is memoryFeed now
-                const groups = {};
-                const sorted = this.allMessages.filter(m => m.category !== 'chat').sort((a, b) => b.timestamp - a.timestamp);
-                sorted.forEach(msg => {
-                    const date = new Date(msg.timestamp).toDateString();
-                    const isMe = msg.senderId === this.user.uid;
-                    const friendId = isMe ? msg.receiverId : msg.senderId;
-                    const friendData = this.onlineUsers.find(u => u.id === friendId) || { name: msg.senderName, streak: 0, dailyRating: { emoji: '😶' } };
-                    if (!groups[date]) groups[date] = {};
-                    if (!groups[date][friendId]) { groups[date][friendId] = { friendName: friendData.name, friendStreak: friendData.streak, friendEmoji: friendData.dailyRating?.emoji || '😶', me: null, them: null }; }
-                    if (isMe && !groups[date][friendId].me) groups[date][friendId].me = msg;
-                    else if (!isMe && !groups[date][friendId].them) groups[date][friendId].them = msg;
-                });
-                return groups;
-            },
+            
             currentStories() {
                 if (!this.activeStoryUser || !this.stories) return [];
-                // Filter expired stories (older than 24h)
                 const cutoff = Date.now() - 24 * 60 * 60 * 1000;
                 return this.stories
                     .filter(s => s.userId === this.activeStoryUser.id && s.timestamp > cutoff)
@@ -992,7 +1070,6 @@
         },
         methods: {
             handleResize() {
-                // Ensure context exists regardless of current view, if canvas is in DOM
                 const canvas = this.$refs.canvas;
                 if (!canvas) return;
                 
@@ -1020,13 +1097,10 @@
                 this.coloringCtx.restore();
             },
             
-            // Updated switchView with persistence fix
             switchView(view) { 
                 this.currentView = view; 
                 if (view === 'canvas') {
-                    // Force refresh of canvas when switching to it to prevent disappearance
                     this.$nextTick(() => { 
-                        // Reload lines from storage if array is empty (failsafe)
                         if (this.mode === 'draw' && this.normalModeLines.length === 0) {
                             const saved = localStorage.getItem('universal_draw_normal_lines');
                             if(saved) this.normalModeLines = JSON.parse(saved);
@@ -1042,16 +1116,7 @@
                 }
             },
             
-            toggleMemoriesView() {
-                if (this.currentView === 'memories') {
-                    this.currentView = 'home';
-                } else {
-                    this.currentView = 'memories';
-                }
-            },
-            
             isUserOnline(u) {
-                // Check if lastSeen is within 5 minutes (300000 ms)
                 if (!u.lastSeen) return false;
                 return (Date.now() - u.lastSeen) < 300000;
             },
@@ -1059,6 +1124,7 @@
             selectChatFriend(friend) { this.selectedChatFriend = friend; this.$nextTick(() => { const container = this.$refs.chatContainer; if(container) container.scrollTop = container.scrollHeight; }); },
             onFriendSelected(friend) { this.pendingSendFriend = friend; this.showFriendModal = false; this.showSendTypeModal = true; },
             confirmSend(category) { this.showSendTypeModal = false; if (this.pendingSendFriend) { this.executeSend(this.pendingSendFriend, category); } },
+            
             initFirebase() {
                 const { auth, onAuthStateChanged, db, doc, onSnapshot, collection, query, where, updateDoc, orderBy } = window.firebaseData;
                 onAuthStateChanged(auth, (user) => {
@@ -1069,28 +1135,56 @@
                         onSnapshot(doc(db, "users", user.uid), (docSnap) => { if (docSnap.exists()) { this.userData = docSnap.data(); if (this.userData.lockPattern && this.userData.lockPattern.length > 0) this.isAppLocked = true; } });
                         this.allMessages = [];
                         
-                        // Messages for Chat
+                        // Messages for Chat & Feed & Timeline (Both Sent and Received)
+                        // Query 1: Received Messages
                         const q1 = query(collection(db, "messages"), where("receiverId", "==", user.uid));
-                        onSnapshot(q1, (snap) => { snap.docChanges().forEach(change => { if (change.type === "added") this.allMessages.push({ id: change.doc.id, ...change.doc.data() }); if (change.type === "modified") { const idx = this.allMessages.findIndex(m => m.id === change.doc.id); if(idx!==-1) this.allMessages[idx] = { id: change.doc.id, ...change.doc.data() }; } }); });
+                        onSnapshot(q1, (snap) => { 
+                            snap.docChanges().forEach(change => { 
+                                if (change.type === "added") {
+                                    const data = change.doc.data();
+                                    // Enhance with sender info if available in onlineUsers
+                                    const sender = this.onlineUsers.find(u => u.id === data.senderId) || { photoURL: null };
+                                    this.allMessages.push({ 
+                                        id: change.doc.id, 
+                                        ...data,
+                                        userPhoto: sender.photoURL,
+                                        isLiked: data.likes && data.likes.includes(user.uid),
+                                        newComment: ''
+                                    }); 
+                                }
+                                if (change.type === "modified") { 
+                                    const idx = this.allMessages.findIndex(m => m.id === change.doc.id); 
+                                    if(idx!==-1) {
+                                        const data = change.doc.data();
+                                        const sender = this.onlineUsers.find(u => u.id === data.senderId) || { photoURL: null };
+                                        this.allMessages[idx] = { 
+                                            id: change.doc.id, 
+                                            ...data,
+                                            userPhoto: sender.photoURL,
+                                            isLiked: data.likes && data.likes.includes(user.uid),
+                                            newComment: this.allMessages[idx].newComment || ''
+                                        }; 
+                                    }
+                                } 
+                            }); 
+                        });
+
+                        // Query 2: Sent Messages
                         const q2 = query(collection(db, "messages"), where("senderId", "==", user.uid));
-                        onSnapshot(q2, (snap) => { snap.docChanges().forEach(change => { if (change.type === "added" && !this.allMessages.find(m => m.id === change.doc.id)) { this.allMessages.push({ id: change.doc.id, ...change.doc.data() }); } }); });
-                        
-                        // Social Feed (Memories) - Sort client-side to avoid index requirement
-                        const feedQuery = query(collection(db, "messages"), where("category", "==", "memory"));
-                        onSnapshot(feedQuery, (snap) => {
-                            const rawPosts = snap.docs.map(doc => {
-                                const data = doc.data();
-                                const sender = this.onlineUsers.find(u => u.id === data.senderId) || { photoURL: null };
-                                return {
-                                    id: doc.id,
-                                    ...data,
-                                    userPhoto: sender.photoURL,
-                                    isLiked: data.likes && data.likes.includes(user.uid),
-                                    newComment: ''
-                                };
-                            });
-                            // Sort Newest First
-                            this.memoryFeed = rawPosts.sort((a, b) => b.timestamp - a.timestamp);
+                        onSnapshot(q2, (snap) => { 
+                            snap.docChanges().forEach(change => { 
+                                if (change.type === "added" && !this.allMessages.find(m => m.id === change.doc.id)) { 
+                                    const data = change.doc.data();
+                                    // For sent messages, userPhoto is MY photo
+                                    this.allMessages.push({ 
+                                        id: change.doc.id, 
+                                        ...data,
+                                        userPhoto: this.userData.photoURL,
+                                        isLiked: data.likes && data.likes.includes(user.uid),
+                                        newComment: ''
+                                    }); 
+                                } 
+                            }); 
                         });
                         
                         // Listen for Stories
@@ -2032,7 +2126,7 @@
             endSettingPattern() { const c = this.$refs.settingCanvas; if(c) c.getContext('2d').clearRect(0,0,c.width,c.height); if (this.currentPattern.length < 3) { this.settingMessage = "قصير"; this.currentPattern = []; } else { this.tempPattern = [...this.currentPattern]; this.settingMessage = "جاهز"; } },
             async saveAdminPattern() { if (!this.adminTargetUser) return; const { db, doc, updateDoc } = window.firebaseData; try { await updateDoc(doc(db, "users", this.adminTargetUser.id), { lockPattern: this.tempPattern }); this.showToast("تم تعيين القفل"); this.showAdminSetLockModal = false; } catch(e) { this.showToast("خطأ"); } },
             logout() { window.firebaseData.signOut(window.firebaseData.auth); this.isAppLocked = false; },
-            async fetchOtherUsers() { const { db, collection, getDocs } = window.firebaseData; const snap = await getDocs(collection(db, "users")); const unique = new Set(); this.onlineUsers = []; snap.forEach(doc => { const d = doc.data(); if (doc.id !== this.user.uid && !unique.has(d.name)) { unique.add(d.name); this.onlineUsers.push({ id: doc.id, ...d }); } }); },
+            async fetchOtherUsers() { const { onSnapshot, collection } = window.firebaseData; onSnapshot(collection(window.firebaseData.db, "users"), (snap) => { const unique = new Set(); this.onlineUsers = []; snap.forEach(doc => { const d = doc.data(); if (doc.id !== this.user.uid && !unique.has(d.name)) { unique.add(d.name); this.onlineUsers.push({ id: doc.id, ...d }); } }); }); },
             openAdminPanel() { this.fetchOtherUsers(); this.showAdminModal = true; this.showSidebar = false; this.tempPattern=[]; this.settingMessage='ارسم النقش'; },
             openSettings() { this.showSidebar = false; this.showSettingsModal = true; this.tempPattern = []; this.currentPattern = []; this.settingMessage = 'ارسم النقش'; setTimeout(() => this.$nextTick(), 100); },
             closeSettings() { this.showSettingsModal = false; this.currentPattern = []; },
