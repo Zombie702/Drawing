@@ -55,7 +55,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, addDoc, getDoc, updateDoc, deleteDoc, collection, onSnapshot, getDocs, query, where, orderBy, writeBatch, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+        import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject, uploadBytesResumable } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCLO2HKD2HbdgdD85aCyHrijCotNx5hSbQ",
@@ -78,7 +78,7 @@
                 doc, setDoc, addDoc, getDoc, updateDoc, deleteDoc, collection, onSnapshot, getDocs, query, where, orderBy, writeBatch, arrayUnion, arrayRemove,
                 createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile, 
                 onAuthStateChanged,
-                sRef, uploadBytes, getDownloadURL, deleteObject
+                sRef, uploadBytes, getDownloadURL, deleteObject, uploadBytesResumable
             };
         } catch (e) { console.error("Firebase Error:", e); }
     </script>
@@ -93,6 +93,10 @@
             overscroll-behavior: none;
             user-select: none; /* Globally disable text selection */
             -webkit-user-select: none;
+        }
+        
+        .pb-safe {
+            padding-bottom: env(safe-area-inset-bottom);
         }
         
         /* Glassmorphism Classes */
@@ -250,6 +254,17 @@
 <body class="bg-[#0f172a] text-white">
 
 <div id="app" v-cloak class="fixed inset-0 w-full h-full flex flex-col">
+
+    <!-- Upload Progress Banner -->
+    <transition name="fade">
+        <div v-if="isUploadingStory" class="fixed top-0 left-0 w-full z-[9999] bg-gradient-to-r from-indigo-600 to-purple-600 shadow-xl flex items-center justify-between px-4 py-3 pb-safe-top">
+            <div class="flex items-center gap-3">
+                <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <span class="font-bold text-sm text-white">جاري رفع القصة...</span>
+            </div>
+            <span class="font-bold text-white text-sm">{{ Math.round(uploadProgress) }}%</span>
+        </div>
+    </transition>
 
     <!-- Background Elements -->
     <div class="fixed top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-900/30 rounded-full blur-[100px] pointer-events-none"></div>
@@ -430,7 +445,7 @@
             </div>
 
             <!-- Timeline View (Side-by-Side) -->
-            <div v-if="currentView === 'timeline'" class="animate-fade pb-10">
+            <div v-if="currentView === 'timeline'" class="animate-fade pb-24">
                 <h2 class="text-center text-xl font-bold mb-6 text-white">الجدول الزمني المشترك</h2>
                 
                 <div v-for="group in timelineGroups" :key="group.date" class="mb-8">
@@ -563,7 +578,7 @@
 
             <!-- Tools Toolbar Container with Toggle -->
             <div v-if="mode !== 'image' && !isWaitingForAccept" 
-                 class="absolute bottom-[90px] left-1/2 transform -translate-x-1/2 z-[50] w-[95%] max-w-[400px] transition-transform duration-300 ease-in-out"
+                 class="absolute bottom-[90px] left-1/2 transform -translate-x-1/2 z-[150] w-[95%] max-w-[400px] transition-transform duration-300 ease-in-out"
                  :class="{ 'translate-y-[120%]': isToolsCollapsed }">
                 
                 <!-- Toggle Arrow Button -->
@@ -878,6 +893,10 @@
                 storyInterval: null,
                 loadingStory: false,
                 storyDuration: 5000, // 5s for images
+                
+                // Upload State
+                uploadProgress: 0,
+                isUploadingStory: false,
             }
         },
         watch: {
@@ -1772,36 +1791,54 @@
                     return;
                 }
                 
-                this.showToast("جاري رفع القصة...", type === 'video' ? "fas fa-video" : "fas fa-image");
+                this.isUploadingStory = true;
+                this.uploadProgress = 0;
                 
                 try {
-                    let url;
-                    const { storage, sRef, uploadBytes, getDownloadURL, db, collection, addDoc } = window.firebaseData;
+                    const { storage, sRef, uploadBytesResumable, getDownloadURL, db, collection, addDoc } = window.firebaseData;
                     
-                    // Use Firebase Storage for both Video and Image for Stories to handle larger files better
                     const storagePath = `stories/${this.user.uid}/${Date.now()}_${file.name}`;
                     const storageRef = sRef(storage, storagePath);
-                    await uploadBytes(storageRef, file);
-                    url = await getDownloadURL(storageRef);
+                    const uploadTask = uploadBytesResumable(storageRef, file);
                     
-                    await addDoc(collection(db, "stories"), {
-                        userId: this.user.uid,
-                        userName: this.userData.name,
-                        userPhoto: this.userData.photoURL,
-                        type: type,
-                        url: url,
-                        storagePath: storagePath, // Save path for deletion
-                        timestamp: Date.now(),
-                        viewers: []
-                    });
-                    
-                    this.showToast("تم نشر القصة بنجاح!", "fas fa-check-circle");
+                    uploadTask.on('state_changed',
+                        (snapshot) => {
+                            this.uploadProgress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        },
+                        (error) => {
+                            console.error("Story upload error:", error);
+                            this.showToast("فشل رفع القصة", "fas fa-times-circle");
+                            this.isUploadingStory = false;
+                        },
+                        async () => {
+                            try {
+                                const url = await getDownloadURL(uploadTask.snapshot.ref);
+                                await addDoc(collection(db, "stories"), {
+                                    userId: this.user.uid,
+                                    userName: this.userData.name,
+                                    userPhoto: this.userData.photoURL,
+                                    type: type,
+                                    url: url,
+                                    storagePath: storagePath,
+                                    timestamp: Date.now(),
+                                    viewers: []
+                                });
+                                this.showToast("تم نشر القصة بنجاح!", "fas fa-check-circle");
+                            } catch (err) {
+                                console.error("Firestore save error:", err);
+                                this.showToast("فشل حفظ بيانات القصة");
+                            } finally {
+                                this.isUploadingStory = false;
+                                this.uploadProgress = 0;
+                            }
+                        }
+                    );
                 } catch (e) {
-                    console.error("Story upload error:", e);
-                    this.showToast("فشل رفع القصة", "fas fa-times-circle");
+                    console.error("Init upload error:", e);
+                    this.showToast("فشل بدء الرفع");
+                    this.isUploadingStory = false;
                 }
                 
-                // Reset input
                 e.target.value = '';
             },
             
