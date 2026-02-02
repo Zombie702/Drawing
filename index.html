@@ -345,181 +345,195 @@
             <main class="flex-1 w-full relative overflow-hidden z-10">
                 
                 <!-- --- HOME PAGE (Feed) --- -->
-                <div v-if="currentView === 'home' || currentView === 'timeline'" class="w-full h-full overflow-y-auto p-4 pb-24 custom-scroll">
-                    <!-- Header -->
-                    <header class="flex justify-between items-center mb-6 px-2">
+                <div v-if="currentView === 'home' || currentView === 'timeline'" class="w-full h-full relative">
+                    <!-- Fixed Header (Sticky) -->
+                    <header class="absolute top-0 left-0 w-full z-[60] glass-heavy flex justify-between items-center px-4 pt-safe pb-2 shadow-lg border-b border-white/5 transition-all duration-300">
                         <div class="flex items-center gap-2" @click="viewMyStories">
-                            <!-- My Profile Ring with Story Indicator -->
+                            <!-- My Profile Ring -->
                             <div class="w-10 h-10 rounded-full flex items-center justify-center p-[2px] cursor-pointer" :class="getMyStoryStatusClass()">
                                 <div class="w-full h-full rounded-full bg-[#1e293b] flex items-center justify-center overflow-hidden border-2 border-[#0f172a]">
                                      <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover">
                                      <span v-else>{{ userData.name?.charAt(0) }}</span>
                                 </div>
                             </div>
-                            <h1 class="text-2xl font-black text-white">Universal <i class="fas fa-bolt text-yellow-400"></i></h1>
+                            <h1 class="text-xl font-black text-white hidden sm:block">Universal</h1>
                         </div>
                         
                         <div class="flex items-center gap-3">
+                             <!-- Streak Counter (Moved Here) -->
+                             <div class="flex items-center gap-1 bg-white/5 px-3 py-1 rounded-full border border-white/5">
+                                 <i class="fas fa-fire text-orange-500 animate-pulse"></i>
+                                 <span class="text-sm font-bold text-white">{{ userData.streak || 0 }}</span>
+                             </div>
+
+                             <!-- Settings Button (Moved Here) -->
+                             <button @click="openSettings" class="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center text-gray-300 hover:bg-white/10 hover:text-white transition">
+                                <i class="fas fa-cog"></i>
+                             </button>
+
                              <!-- Timeline/Feed Toggle -->
-                             <button @click="currentView = currentView === 'timeline' ? 'home' : 'timeline'" class="w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/10 transition border border-white/10 relative">
+                             <button @click="currentView = currentView === 'timeline' ? 'home' : 'timeline'" class="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center text-indigo-400 hover:bg-indigo-500/20 transition relative">
                                 <i class="fas" :class="currentView === 'timeline' ? 'fa-home' : 'fa-calendar-alt'"></i>
                             </button>
                         </div>
                     </header>
 
-                    <!-- Stories / Friends Strip -->
-                    <div class="mb-6">
-                         <div class="flex gap-4 overflow-x-auto pb-2 scrollbar-hide px-2">
-                            <!-- My Story (Add) -->
-                            <div class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group" @click="viewMyStories">
-                                <!-- My Story Avatar & Ring -->
-                                <div class="relative w-16 h-16 rounded-full p-[2px]" :class="getMyStoryStatusClass()">
-                                     <div class="w-full h-full rounded-full glass border-2 border-dashed border-indigo-400 flex items-center justify-center text-indigo-400 relative overflow-hidden">
-                                         <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover opacity-80">
-                                         <div v-else class="w-full h-full flex items-center justify-center font-bold">{{ userData.name?.charAt(0) }}</div>
-                                     </div>
-                                     <!-- Small Plus Button: Show ONLY if NO active story -->
-                                     <div v-if="!hasActiveStory" class="absolute bottom-0 right-0 bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center border-2 border-[#0f172a] text-white text-[10px] z-20">
-                                        <i class="fas fa-plus"></i>
-                                     </div>
+                    <!-- Scrollable Body -->
+                    <div class="w-full h-full overflow-y-auto p-4 pt-24 pb-24 custom-scroll">
+                        <!-- Stories / Friends Strip -->
+                        <div class="mb-6">
+                             <div class="flex gap-4 overflow-x-auto pb-2 scrollbar-hide px-2">
+                                <!-- My Story (Add) -->
+                                <div class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group" @click="viewMyStories">
+                                    <!-- My Story Avatar & Ring -->
+                                    <div class="relative w-16 h-16 rounded-full p-[2px]" :class="getMyStoryStatusClass()">
+                                         <div class="w-full h-full rounded-full glass border-2 border-dashed border-indigo-400 flex items-center justify-center text-indigo-400 relative overflow-hidden">
+                                             <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover opacity-80">
+                                             <div v-else class="w-full h-full flex items-center justify-center font-bold">{{ userData.name?.charAt(0) }}</div>
+                                         </div>
+                                         <!-- Small Plus Button: Show ONLY if NO active story -->
+                                         <div v-if="!hasActiveStory" class="absolute bottom-0 right-0 bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center border-2 border-[#0f172a] text-white text-[10px] z-20">
+                                            <i class="fas fa-plus"></i>
+                                         </div>
+                                    </div>
+                                    <span class="text-xs font-bold text-indigo-300">قصتي</span>
+                                    <input type="file" ref="storyInput" @change="handleStoryUpload" accept="image/*,video/*" class="hidden">
                                 </div>
-                                <span class="text-xs font-bold text-indigo-300">قصتي</span>
-                                <input type="file" ref="storyInput" @change="handleStoryUpload" accept="image/*,video/*" class="hidden">
-                            </div>
 
-                            <!-- Friend Stories -->
-                            <div v-for="u in onlineUsers" :key="u.id" class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group">
-                                <!-- Friend Avatar with Online Dot Fix & Story Ring -->
-                                <div class="relative w-16 h-16 rounded-full p-[2px]" :class="getStoryRingClass(u.id)" @click="viewFriendStory(u)">
-                                     <div class="w-full h-full rounded-full bg-black overflow-hidden relative border-2 border-[#0f172a]">
-                                        <img v-if="u.photoURL" :src="u.photoURL" class="w-full h-full object-cover">
-                                        <span v-else class="w-full h-full flex items-center justify-center font-bold text-lg">{{ u.name.charAt(0) }}</span>
-                                     </div>
-                                     <!-- Fixed Online Dot (Outside overflow-hidden) -->
-                                     <div class="absolute bottom-1 right-0 w-3 h-3 rounded-full border-2 border-[#0f172a] z-10" 
-                                          :class="isUserOnline(u) ? 'bg-green-500' : 'bg-gray-500'"></div>
+                                <!-- Friend Stories -->
+                                <div v-for="u in onlineUsers" :key="u.id" class="flex flex-col items-center gap-2 min-w-[70px] cursor-pointer group">
+                                    <!-- Friend Avatar with Online Dot Fix & Story Ring -->
+                                    <div class="relative w-16 h-16 rounded-full p-[2px]" :class="getStoryRingClass(u.id)" @click="viewFriendStory(u)">
+                                         <div class="w-full h-full rounded-full bg-black overflow-hidden relative border-2 border-[#0f172a]">
+                                            <img v-if="u.photoURL" :src="u.photoURL" class="w-full h-full object-cover">
+                                            <span v-else class="w-full h-full flex items-center justify-center font-bold text-lg">{{ u.name.charAt(0) }}</span>
+                                         </div>
+                                         <!-- Fixed Online Dot (Outside overflow-hidden) -->
+                                         <div class="absolute bottom-1 right-0 w-3 h-3 rounded-full border-2 border-[#0f172a] z-10" 
+                                              :class="isUserOnline(u) ? 'bg-green-500' : 'bg-gray-500'"></div>
+                                    </div>
+                                    <span class="text-xs text-gray-300 truncate w-full text-center">{{ u.name }}</span>
                                 </div>
-                                <span class="text-xs text-gray-300 truncate w-full text-center">{{ u.name }}</span>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Social Feed View -->
-                    <div v-if="currentView === 'home'" class="space-y-6">
-                         <div v-if="homeFeedPosts.length === 0" class="glass p-10 rounded-3xl text-center border border-white/5 mx-2">
-                            <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                                <i class="fas fa-inbox text-3xl text-gray-500"></i>
-                            </div>
-                            <h3 class="font-bold text-lg text-white mb-2">صندوق الذكريات فارغ</h3>
-                            <p class="text-sm text-gray-400">ستظهر هنا الذكريات التي يرسلها لك الأصدقاء.</p>
-                            <button @click="triggerCamera" class="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-full font-bold text-sm">إرسال لصديق</button>
-                         </div>
+                        <!-- Social Feed View -->
+                        <div v-if="currentView === 'home'" class="space-y-6">
+                             <div v-if="homeFeedPosts.length === 0" class="glass p-10 rounded-3xl text-center border border-white/5 mx-2">
+                                <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                                    <i class="fas fa-inbox text-3xl text-gray-500"></i>
+                                </div>
+                                <h3 class="font-bold text-lg text-white mb-2">صندوق الذكريات فارغ</h3>
+                                <p class="text-sm text-gray-400">ستظهر هنا الذكريات التي يرسلها لك الأصدقاء.</p>
+                                <button @click="triggerCamera" class="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-full font-bold text-sm">إرسال لصديق</button>
+                             </div>
 
-                         <!-- Post Card -->
-                         <div v-for="post in homeFeedPosts" :key="post.id" class="glass rounded-3xl overflow-hidden border border-white/5 shadow-xl mx-2">
-                            <!-- Post Header -->
-                            <div class="p-4 flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <div class="relative w-10 h-10">
-                                        <div class="w-full h-full rounded-full bg-indigo-500/20 flex items-center justify-center overflow-hidden border border-white/10">
-                                            <img v-if="post.userPhoto" :src="post.userPhoto" class="w-full h-full object-cover">
-                                            <span v-else class="text-indigo-300 font-bold">{{ post.senderName.charAt(0) }}</span>
+                             <!-- Post Card -->
+                             <div v-for="post in homeFeedPosts" :key="post.id" class="glass rounded-3xl overflow-hidden border border-white/5 shadow-xl mx-2">
+                                <!-- Post Header -->
+                                <div class="p-4 flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="relative w-10 h-10">
+                                            <div class="w-full h-full rounded-full bg-indigo-500/20 flex items-center justify-center overflow-hidden border border-white/10">
+                                                <img v-if="post.userPhoto" :src="post.userPhoto" class="w-full h-full object-cover">
+                                                <span v-else class="text-indigo-300 font-bold">{{ post.senderName.charAt(0) }}</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-bold text-sm text-white">{{ post.senderName }}</h4>
+                                            <span class="text-[10px] text-gray-400">{{ formatDateHeader(post.timestamp) }}</span>
                                         </div>
                                     </div>
-                                    <div>
-                                        <h4 class="font-bold text-sm text-white">{{ post.senderName }}</h4>
-                                        <span class="text-[10px] text-gray-400">{{ formatDateHeader(post.timestamp) }}</span>
+                                    <button class="text-gray-400 hover:text-white"><i class="fas fa-ellipsis-h"></i></button>
+                                </div>
+
+                                <!-- Post Image -->
+                                <div class="w-full bg-black/40 relative">
+                                    <img :src="post.imageUrl" class="w-full h-auto object-contain max-h-[500px]" loading="lazy" @click="viewImage(post.imageUrl, post.senderName)">
+                                </div>
+
+                                <!-- Post Actions -->
+                                <div class="p-4">
+                                    <div class="flex items-center gap-4 mb-3">
+                                        <button @click="toggleLike(post)" class="text-2xl transition transform active:scale-90" :class="post.isLiked ? 'text-red-500' : 'text-white hover:text-gray-300'">
+                                            <i :class="post.isLiked ? 'fas fa-heart' : 'far fa-heart'"></i>
+                                        </button>
+                                        <button class="text-2xl text-white hover:text-gray-300"><i class="far fa-comment"></i></button>
+                                        <button class="text-2xl text-white hover:text-gray-300 ml-auto"><i class="far fa-bookmark"></i></button>
                                     </div>
-                                </div>
-                                <button class="text-gray-400 hover:text-white"><i class="fas fa-ellipsis-h"></i></button>
-                            </div>
-
-                            <!-- Post Image -->
-                            <div class="w-full bg-black/40 relative">
-                                <img :src="post.imageUrl" class="w-full h-auto object-contain max-h-[500px]" loading="lazy" @click="viewImage(post.imageUrl, post.senderName)">
-                            </div>
-
-                            <!-- Post Actions -->
-                            <div class="p-4">
-                                <div class="flex items-center gap-4 mb-3">
-                                    <button @click="toggleLike(post)" class="text-2xl transition transform active:scale-90" :class="post.isLiked ? 'text-red-500' : 'text-white hover:text-gray-300'">
-                                        <i :class="post.isLiked ? 'fas fa-heart' : 'far fa-heart'"></i>
-                                    </button>
-                                    <button class="text-2xl text-white hover:text-gray-300"><i class="far fa-comment"></i></button>
-                                    <button class="text-2xl text-white hover:text-gray-300 ml-auto"><i class="far fa-bookmark"></i></button>
-                                </div>
-                                
-                                <p class="text-sm font-bold text-white mb-2" v-if="post.likes && post.likes.length > 0">{{ post.likes.length }} إعجاب</p>
-                                
-                                <!-- Caption/Comments -->
-                                <div class="space-y-1 mb-3">
-                                    <div v-for="(comment, idx) in (post.comments || []).slice(-3)" :key="idx" class="text-sm">
-                                        <span class="font-bold text-white ml-2">{{ comment.userName }}</span>
-                                        <span class="text-gray-300">{{ comment.text }}</span>
+                                    
+                                    <p class="text-sm font-bold text-white mb-2" v-if="post.likes && post.likes.length > 0">{{ post.likes.length }} إعجاب</p>
+                                    
+                                    <!-- Caption/Comments -->
+                                    <div class="space-y-1 mb-3">
+                                        <div v-for="(comment, idx) in (post.comments || []).slice(-3)" :key="idx" class="text-sm">
+                                            <span class="font-bold text-white ml-2">{{ comment.userName }}</span>
+                                            <span class="text-gray-300">{{ comment.text }}</span>
+                                        </div>
                                     </div>
+
+                                    <!-- Add Comment -->
+                                    <form @submit.prevent="addComment(post)" class="flex items-center gap-3 mt-2">
+                                         <div class="w-6 h-6 rounded-full bg-gray-700 overflow-hidden flex-shrink-0">
+                                             <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover">
+                                             <div v-else class="w-full h-full bg-indigo-500"></div>
+                                         </div>
+                                         <input v-model="post.newComment" type="text" placeholder="أضف تعليقاً..." class="flex-1 bg-transparent text-sm text-white focus:outline-none placeholder-gray-500">
+                                         <button type="submit" :disabled="!post.newComment" class="text-indigo-400 font-bold text-sm disabled:opacity-50">نشر</button>
+                                    </form>
                                 </div>
+                             </div>
+                        </div>
 
-                                <!-- Add Comment -->
-                                <form @submit.prevent="addComment(post)" class="flex items-center gap-3 mt-2">
-                                     <div class="w-6 h-6 rounded-full bg-gray-700 overflow-hidden flex-shrink-0">
-                                         <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover">
-                                         <div v-else class="w-full h-full bg-indigo-500"></div>
-                                     </div>
-                                     <input v-model="post.newComment" type="text" placeholder="أضف تعليقاً..." class="flex-1 bg-transparent text-sm text-white focus:outline-none placeholder-gray-500">
-                                     <button type="submit" :disabled="!post.newComment" class="text-indigo-400 font-bold text-sm disabled:opacity-50">نشر</button>
-                                </form>
-                            </div>
-                         </div>
-                    </div>
-
-                    <!-- Timeline View -->
-                    <div v-if="currentView === 'timeline'" class="animate-fade pb-24">
-                        <h2 class="text-center text-xl font-bold mb-6 text-white">الجدول الزمني المشترك</h2>
-                        
-                        <div v-for="group in timelineGroups" :key="group.date" class="mb-8">
-                            <h3 class="sticky top-0 bg-[#0f172a]/90 backdrop-blur z-20 py-2 px-4 text-sm font-bold text-gray-400 mb-4 border-b border-white/5 w-full flex items-center justify-between">
-                                <span><i class="far fa-calendar-alt ml-2"></i> {{ formatDateHeader(group.date) }}</span>
-                                <span class="text-xs font-normal bg-white/10 px-2 py-1 rounded-full">{{ group.pairs.length }} ثنائي</span>
-                            </h3>
+                        <!-- Timeline View -->
+                        <div v-if="currentView === 'timeline'" class="animate-fade pb-24">
+                            <h2 class="text-center text-xl font-bold mb-6 text-white">الجدول الزمني المشترك</h2>
                             
-                            <div v-for="(pair, idx) in group.pairs" :key="idx" class="mb-8 px-2">
-                                <div class="flex items-center justify-center gap-2 mb-3">
-                                     <span class="text-sm font-bold text-white">أنا</span>
-                                     <i class="fas fa-exchange-alt text-gray-500 text-xs"></i>
-                                     <span class="text-sm font-bold text-white">{{ pair.partner.name }}</span>
-                                </div>
+                            <div v-for="group in timelineGroups" :key="group.date" class="mb-8">
+                                <h3 class="sticky top-0 bg-[#0f172a]/90 backdrop-blur z-20 py-2 px-4 text-sm font-bold text-gray-400 mb-4 border-b border-white/5 w-full flex items-center justify-between">
+                                    <span><i class="far fa-calendar-alt ml-2"></i> {{ formatDateHeader(group.date) }}</span>
+                                    <span class="text-xs font-normal bg-white/10 px-2 py-1 rounded-full">{{ group.pairs.length }} ثنائي</span>
+                                </h3>
                                 
-                                <div class="flex gap-3 h-56">
-                                    <div class="flex-1 rounded-2xl overflow-hidden bg-white/5 border border-white/10 relative group">
-                                        <template v-if="pair.me">
-                                            <img :src="pair.me.imageUrl" class="w-full h-full object-cover transition duration-500 group-hover:scale-110" @click="viewImage(pair.me.imageUrl, 'أنا')">
-                                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
-                                            <div class="absolute bottom-2 right-2 text-xs font-bold text-white"><i class="fas fa-user-circle"></i> أنا</div>
-                                            <div class="absolute bottom-2 left-2 text-xs text-gray-300"><i class="fas fa-heart text-red-500"></i> {{ pair.me.likes?.length || 0 }}</div>
-                                        </template>
-                                        <div v-else class="w-full h-full flex items-center justify-center text-gray-500 text-xs flex-col gap-2 bg-black/20">
-                                            <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center"><i class="fas fa-ghost text-xl opacity-50"></i></div>
-                                            <span>لم ترسل</span>
-                                        </div>
+                                <div v-for="(pair, idx) in group.pairs" :key="idx" class="mb-8 px-2">
+                                    <div class="flex items-center justify-center gap-2 mb-3">
+                                         <span class="text-sm font-bold text-white">أنا</span>
+                                         <i class="fas fa-exchange-alt text-gray-500 text-xs"></i>
+                                         <span class="text-sm font-bold text-white">{{ pair.partner.name }}</span>
                                     </div>
-                                    <div class="flex-1 rounded-2xl overflow-hidden bg-white/5 border border-white/10 relative group">
-                                        <template v-if="pair.them">
-                                            <img :src="pair.them.imageUrl" class="w-full h-full object-cover transition duration-500 group-hover:scale-110" @click="viewImage(pair.them.imageUrl, pair.partner.name)">
-                                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
-                                            <div class="absolute bottom-2 right-2 text-xs font-bold text-white"><i class="fas fa-user"></i> {{ pair.partner.name }}</div>
-                                            <div class="absolute bottom-2 left-2 text-xs text-gray-300"><i class="fas fa-heart text-red-500"></i> {{ pair.them.likes?.length || 0 }}</div>
-                                        </template>
-                                        <div v-else class="w-full h-full flex items-center justify-center text-gray-500 text-xs flex-col gap-2 bg-black/20">
-                                            <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center"><i class="fas fa-hourglass-half text-xl opacity-50"></i></div>
-                                            <span>لم يرسل</span>
+                                    
+                                    <div class="flex gap-3 h-56">
+                                        <div class="flex-1 rounded-2xl overflow-hidden bg-white/5 border border-white/10 relative group">
+                                            <template v-if="pair.me">
+                                                <img :src="pair.me.imageUrl" class="w-full h-full object-cover transition duration-500 group-hover:scale-110" @click="viewImage(pair.me.imageUrl, 'أنا')">
+                                                <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+                                                <div class="absolute bottom-2 right-2 text-xs font-bold text-white"><i class="fas fa-user-circle"></i> أنا</div>
+                                                <div class="absolute bottom-2 left-2 text-xs text-gray-300"><i class="fas fa-heart text-red-500"></i> {{ pair.me.likes?.length || 0 }}</div>
+                                            </template>
+                                            <div v-else class="w-full h-full flex items-center justify-center text-gray-500 text-xs flex-col gap-2 bg-black/20">
+                                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center"><i class="fas fa-ghost text-xl opacity-50"></i></div>
+                                                <span>لم ترسل</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 rounded-2xl overflow-hidden bg-white/5 border border-white/10 relative group">
+                                            <template v-if="pair.them">
+                                                <img :src="pair.them.imageUrl" class="w-full h-full object-cover transition duration-500 group-hover:scale-110" @click="viewImage(pair.them.imageUrl, pair.partner.name)">
+                                                <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+                                                <div class="absolute bottom-2 right-2 text-xs font-bold text-white"><i class="fas fa-user"></i> {{ pair.partner.name }}</div>
+                                                <div class="absolute bottom-2 left-2 text-xs text-gray-300"><i class="fas fa-heart text-red-500"></i> {{ pair.them.likes?.length || 0 }}</div>
+                                            </template>
+                                            <div v-else class="w-full h-full flex items-center justify-center text-gray-500 text-xs flex-col gap-2 bg-black/20">
+                                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center"><i class="fas fa-hourglass-half text-xl opacity-50"></i></div>
+                                                <span>لم يرسل</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        <div v-if="timelineGroups.length === 0" class="text-center py-20 text-gray-500">
-                            <i class="fas fa-history text-4xl mb-3 opacity-30"></i>
-                            <p>لا توجد ذكريات مشتركة في التقويم</p>
+                            <div v-if="timelineGroups.length === 0" class="text-center py-20 text-gray-500">
+                                <i class="fas fa-history text-4xl mb-3 opacity-30"></i>
+                                <p>لا توجد ذكريات مشتركة في التقويم</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -676,43 +690,39 @@
 
                 <!-- --- PROFILE PAGE --- -->
                 <div v-if="currentView === 'profile'" class="w-full h-full overflow-y-auto p-6 pb-24 custom-scroll">
-                    <!-- Profile Header -->
+                    <!-- Profile Header (Updated) -->
                     <div class="flex justify-between items-center mb-6">
                          <h1 class="text-3xl font-bold">الملف الشخصي</h1>
+                         <!-- Settings button moved to Home header, but can remain here for redundancy or removed. User asked to 'remove widget' from scrollable content, not header buttons specifically. I'll keep it here for now as it's standard UX. -->
                          <button @click="openSettings" class="w-12 h-12 rounded-full glass flex items-center justify-center text-blue-400 hover:bg-white/10 transition border border-white/10">
                             <i class="fas fa-cog text-xl"></i>
                         </button>
                     </div>
                     <div class="flex flex-col items-center mb-8">
-                        <div class="w-32 h-32 rounded-full bg-gradient-to-tr from-indigo-500 to-pink-500 p-1 mb-3 shadow-[0_0_30px_rgba(99,102,241,0.3)] relative group">
-                            <div class="w-full h-full rounded-full bg-[#1e293b] flex items-center justify-center text-3xl font-bold overflow-hidden relative">
-                                 <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover">
-                                 <span v-else>{{ userData.name?.charAt(0) }}</span>
-                                 <div @click="triggerProfileUpload" class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer">
-                                     <i class="fas fa-camera text-white text-2xl"></i>
-                                 </div>
+                        <div class="relative group">
+                            <div class="w-32 h-32 rounded-full bg-gradient-to-tr from-indigo-500 to-pink-500 p-1 mb-3 shadow-[0_0_30px_rgba(99,102,241,0.3)]">
+                                <div class="w-full h-full rounded-full bg-[#1e293b] flex items-center justify-center text-3xl font-bold overflow-hidden relative">
+                                     <img v-if="userData.photoURL" :src="userData.photoURL" class="w-full h-full object-cover">
+                                     <span v-else>{{ userData.name?.charAt(0) }}</span>
+                                </div>
                             </div>
-                            <input type="file" ref="profileInput" @change="handleProfileUpload" accept="image/*" class="hidden">
+                            <!-- Edit Button -->
+                            <button @click="openEditProfile" class="absolute bottom-2 right-0 bg-indigo-600 w-10 h-10 rounded-full flex items-center justify-center text-white border-4 border-[#0f172a] shadow-lg hover:scale-110 transition">
+                                <i class="fas fa-pen"></i>
+                            </button>
                         </div>
-                        <h2 class="text-2xl font-bold">{{ userData.name }}</h2>
-                        <p class="text-gray-400 text-sm">{{ userData.email }}</p>
-                        <div class="mt-2 bg-white/5 px-3 py-1 rounded-full text-xs text-gray-400 border border-white/5">{{ getDeviceInfo() }}</div>
+                        <h2 class="text-2xl font-bold mt-2">{{ userData.name }}</h2>
+                        <!-- Bio Section -->
+                        <p v-if="userData.bio" class="text-gray-300 text-sm mt-1 text-center max-w-xs leading-relaxed opacity-80">{{ userData.bio }}</p>
+                        <p v-else class="text-gray-500 text-xs mt-1 italic">لا يوجد نبذة شخصية</p>
+                        
+                        <p class="text-gray-500 text-xs mt-2">{{ userData.email }}</p>
                     </div>
-                     <div class="grid grid-cols-2 gap-4 mb-8">
-                         <div class="glass p-4 rounded-xl text-center border border-white/10">
-                             <i class="fas fa-fire text-orange-400 text-2xl mb-2"></i>
-                             <p class="text-2xl font-bold text-white">{{ userData.streak || 0 }}</p>
-                             <p class="text-xs text-gray-400">ستريك</p>
-                         </div>
-                         <div class="glass p-4 rounded-xl text-center border border-white/10">
-                             <i class="fas fa-star text-yellow-400 text-2xl mb-2"></i>
-                             <p class="text-2xl font-bold text-white">{{ userData.dailyRating?.stars || 0 }}</p>
-                             <p class="text-xs text-gray-400">تقييم اليوم</p>
-                         </div>
-                     </div>
+                    
+                     <!-- Stats Removed (Streak moved to Header, Rating Removed) -->
 
                      <!-- NEW: My Posts Grid (TikTok-Style) -->
-                     <div class="mt-6">
+                     <div class="mt-6 border-t border-white/5 pt-6">
                         <h3 class="font-bold text-lg mb-4 px-2">منشوراتي</h3>
                         <div v-if="myPosts.length === 0" class="text-center text-gray-500 py-10">
                             <i class="fas fa-camera text-3xl mb-2 opacity-50"></i>
@@ -756,6 +766,44 @@
     </template>
 
     <!-- Modals and Overlays (Outside the flex scaffold for proper layering) -->
+
+    <!-- Edit Profile Modal -->
+    <div v-if="showEditProfileModal" class="fixed inset-0 z-[6000] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass w-full max-w-sm rounded-3xl p-6 border border-white/10 animate-scale-in">
+            <h3 class="font-bold text-xl text-white mb-6 text-center">تعديل الملف الشخصي</h3>
+            
+            <div class="flex flex-col gap-4">
+                <!-- Avatar Upload -->
+                <div class="flex justify-center mb-2">
+                    <div @click="$refs.editProfileInput.click()" class="relative w-24 h-24 rounded-full bg-white/5 cursor-pointer group border-2 border-dashed border-gray-500 hover:border-indigo-500 transition overflow-hidden">
+                        <img v-if="editProfileData.photoURL" :src="editProfileData.photoURL" class="w-full h-full object-cover">
+                        <div v-else class="w-full h-full flex items-center justify-center text-2xl">{{ editProfileData.name?.charAt(0) }}</div>
+                        <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                            <i class="fas fa-camera text-white"></i>
+                        </div>
+                    </div>
+                    <input type="file" ref="editProfileInput" @change="handleEditProfileImage" accept="image/*" class="hidden">
+                </div>
+
+                <!-- Name Input -->
+                <div>
+                    <label class="text-xs text-gray-400 mr-2 mb-1 block font-bold">الاسم</label>
+                    <input v-model="editProfileData.name" type="text" class="w-full p-3 rounded-xl bg-black/20 border border-white/10 text-white focus:border-indigo-500 focus:outline-none transition">
+                </div>
+
+                <!-- Bio Input -->
+                <div>
+                    <label class="text-xs text-gray-400 mr-2 mb-1 block font-bold">النبذة (Bio)</label>
+                    <textarea v-model="editProfileData.bio" rows="3" placeholder="اكتب شيئاً عن نفسك..." class="w-full p-3 rounded-xl bg-black/20 border border-white/10 text-white focus:border-indigo-500 focus:outline-none transition resize-none"></textarea>
+                </div>
+
+                <div class="flex gap-3 mt-4">
+                    <button @click="showEditProfileModal = false" class="flex-1 bg-white/10 text-white py-3 rounded-xl font-bold hover:bg-white/20 transition">إلغاء</button>
+                    <button @click="saveProfile" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition">حفظ</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Post Detail Modal (TikTok Style) -->
     <div v-if="selectedPost" class="fixed inset-0 z-[7000] bg-black flex flex-col animate-scale-in">
@@ -1130,7 +1178,11 @@
                 
                 // Post Detail
                 selectedPost: null,
-                showCommentsSheet: false // Added state for comments sheet
+                showCommentsSheet: false, // Added state for comments sheet
+                
+                // Edit Profile State
+                showEditProfileModal: false,
+                editProfileData: { name: '', bio: '', photoURL: '' }
             }
         },
         watch: {
@@ -1228,6 +1280,7 @@
         methods: {
             handleBackNavigation(event) {
                 // Priority 1: Dismiss Overlays/Modals
+                if (this.showEditProfileModal) { this.showEditProfileModal = false; return; }
                 if (this.showCommentsSheet) { this.showCommentsSheet = false; return; }
                 if (this.viewingImage) { this.viewingImage = null; return; }
                 if (this.selectedPost) { this.selectedPost = null; return; }
@@ -2319,6 +2372,47 @@
             closePostDetail() {
                 history.back();
                 // State cleared in handleBackNavigation
+            },
+
+            // Edit Profile Methods
+            openEditProfile() {
+                history.pushState({ modal: 'editProfile' }, '');
+                this.editProfileData = {
+                    name: this.userData.name,
+                    bio: this.userData.bio || '',
+                    photoURL: this.userData.photoURL
+                };
+                this.showEditProfileModal = true;
+            },
+            async handleEditProfileImage(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                this.showToast("جاري معالجة الصورة...", "fas fa-spinner fa-spin");
+                try {
+                    const blob = await new Promise(resolve => {
+                         const reader = new FileReader();
+                         reader.onload = (e) => resolve(new Blob([e.target.result]));
+                         reader.readAsArrayBuffer(file);
+                    });
+                    const url = await this.uploadToImgBB(blob);
+                    this.editProfileData.photoURL = url;
+                    this.showToast("تم رفع الصورة بنجاح");
+                } catch(e) { console.error(e); this.showToast("فشل رفع الصورة"); }
+            },
+            async saveProfile() {
+                const { db, doc, updateDoc } = window.firebaseData;
+                try {
+                    await updateDoc(doc(db, "users", this.user.uid), {
+                        name: this.editProfileData.name,
+                        bio: this.editProfileData.bio,
+                        photoURL: this.editProfileData.photoURL
+                    });
+                    this.userData.name = this.editProfileData.name;
+                    this.userData.bio = this.editProfileData.bio;
+                    this.userData.photoURL = this.editProfileData.photoURL;
+                    this.showToast("تم تحديث الملف الشخصي", "fas fa-check-circle");
+                    history.back(); // Close modal
+                } catch(e) { console.error(e); this.showToast("فشل الحفظ"); }
             },
 
             // Custom Color Picker Methods
