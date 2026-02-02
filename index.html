@@ -259,14 +259,17 @@
 
 <div id="app" v-cloak class="fixed inset-0 w-full h-full flex flex-col">
 
-    <!-- Upload Progress Banner -->
+    <!-- Upload Progress Banner with Cancel -->
     <transition name="fade">
         <div v-if="isUploadingStory" class="fixed top-0 left-0 w-full z-[9999] bg-gradient-to-r from-indigo-600 to-purple-600 shadow-xl flex items-center justify-between px-4 pt-safe pb-3">
             <div class="flex items-center gap-3">
                 <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                <span class="font-bold text-sm text-white">جاري رفع القصة...</span>
+                <span class="font-bold text-sm text-white">جاري رفع القصة... {{ Math.round(uploadProgress) }}%</span>
             </div>
-            <span class="font-bold text-white text-sm">{{ Math.round(uploadProgress) }}%</span>
+            <!-- Cancel Button -->
+            <button @click="cancelUpload" class="bg-white/20 hover:bg-white/30 text-white w-8 h-8 rounded-full flex items-center justify-center transition">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
     </transition>
 
@@ -721,7 +724,6 @@
     </template>
 
     <!-- Modals and Overlays (Outside the flex scaffold for proper layering) -->
-    <!-- ... Modals ... -->
 
     <!-- Story Viewer Modal -->
     <div v-if="showStoryViewer" class="fixed inset-0 z-[7000] bg-black flex flex-col">
@@ -760,7 +762,6 @@
         </div>
     </div>
 
-    <!-- ... Other Modals ... -->
     <!-- Magic Wand Modal -->
     <div v-if="showMagicModal" class="fixed inset-0 z-[5500] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
          <div class="glass w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-slide-up border border-white/10 relative">
@@ -780,9 +781,6 @@
          </div>
     </div>
 
-    <!-- ... Color Picker, Friends, etc ... -->
-    <!-- (Include all other existing modals here, ensuring they are outside the flex scaffold) -->
-    
     <!-- Color Picker Modal -->
     <div v-if="showColorPicker" class="fixed inset-0 z-[5300] bg-black/60 backdrop-blur-md flex items-center justify-center p-4" @click.self="showColorPicker = false">
         <div class="glass w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-slide-up border border-white/10">
@@ -945,7 +943,8 @@
                 allMessages: [], 
                 sending: false,
                 isDrawing: false, ctx: null, 
-                brushColor: '#ffffff', customColor: '#ffffff', brushSize: 5, isEraser: false, 
+                // Fix: Default brush color to Black so it is visible on White canvas
+                brushColor: '#000000', customColor: '#000000', brushSize: 5, isEraser: false, 
                 uploadedImage: null,
                 isAppLocked: false, currentPattern: [], tempPattern: [], settingMessage: 'ارسم النقش', lockError: '',
                 installPrompt: null, toast: { show: false, message: '', icon: '' }, confirmModal: { show: false, title: '', message: '', icon: '', action: null },
@@ -969,8 +968,9 @@
                 
                 showBrushPopup: false,
                 showColorPicker: false,
-                tempColor: '#ffffff',
-                picker: { h: 0, s: 0, v: 100, isDragging: false },
+                // Fix: Default custom colors to black
+                tempColor: '#000000',
+                picker: { h: 0, s: 0, v: 0, isDragging: false }, 
                 
                 isToolsCollapsed: false,
                 
@@ -987,6 +987,7 @@
                 // Upload State
                 uploadProgress: 0,
                 isUploadingStory: false,
+                currentUploadTask: null, // Added to store task for cancellation
             }
         },
         watch: {
@@ -1416,6 +1417,7 @@
                 } else {
                     this.ctx.save();
                     this.normalModeLines.forEach(line => this.drawRemoteLine(line));
+                    // Fix: Ensure current path is drawn immediately
                     if (this.isDrawing && this.currentPath.length > 0) {
                         this.ctx.beginPath(); 
                         this.ctx.lineWidth = this.isEraser ? 25 : this.brushSize; 
@@ -1424,7 +1426,8 @@
                             this.ctx.strokeStyle = '#000000'; 
                         } else {
                             this.ctx.globalCompositeOperation = 'source-over';
-                            this.ctx.strokeStyle = (this.customColor !== '#ffffff' && this.colors.indexOf(this.brushColor) === -1 ? this.customColor : this.brushColor);
+                            // Ensure color is visible (not white on white)
+                            this.ctx.strokeStyle = (this.customColor !== '#ffffff' && this.colors && this.colors.indexOf(this.brushColor) === -1 ? this.customColor : this.brushColor);
                         }
                         this.ctx.lineCap = 'round'; 
                         this.ctx.lineJoin = 'round';
@@ -1502,11 +1505,18 @@
                     return;
                 }
                 if (this.mode === 'color' && this.isBucket) return;
-                this.draw(e);
+                this.draw(e); // Calls draw which calls redraw
             },
             handleEnd(e) { if (this.isDrawing) { this.stopDrawing(); } },
             startDrawing(e) { if (e.touches && e.touches.length > 1) { this.isDrawing = false; return; } if(this.isWaitingForAccept) return; this.isDrawing = true; this.currentPath = []; this.draw(e); }, 
-            draw(e) { if (e.touches && e.touches.length > 1) { if (this.isDrawing) this.stopDrawing(); this.isDrawing = false; return; } if(!this.isDrawing || this.isWaitingForAccept) return; e.preventDefault(); const pos = this.getPointerPos(e); this.currentPath.push({x: pos.x, y: pos.y}); this.redraw(); },
+            draw(e) { 
+                if (e.touches && e.touches.length > 1) { if (this.isDrawing) this.stopDrawing(); this.isDrawing = false; return; } 
+                if(!this.isDrawing || this.isWaitingForAccept) return; 
+                e.preventDefault(); 
+                const pos = this.getPointerPos(e); 
+                this.currentPath.push({x: pos.x, y: pos.y}); 
+                this.redraw(); // Immediate re-render for real-time ink
+            },
             
             async stopDrawing() { 
                 if(this.isWaitingForAccept) return; this.isDrawing=false; 
@@ -1538,7 +1548,8 @@
                         const { db, doc, updateDoc, arrayUnion } = window.firebaseData; 
                         try { await updateDoc(doc(db, "sessions", this.pairing.sessionId), { lines: arrayUnion(actionToSend) }); } catch(e) { console.error("Sync error", e); } 
                     }
-                    this.currentPath = []; this.redraw();
+                    this.currentPath = []; 
+                    this.redraw();
                 } 
             },
             
@@ -1706,7 +1717,9 @@
             async syncUndoRemove(item) { const { db, doc, updateDoc } = window.firebaseData; const lines = this.mode === 'color' ? this.coloringModeLines : this.normalModeLines; await updateDoc(doc(db, "sessions", this.pairing.sessionId), { lines: lines }); },
             async syncRedoAdd(item) { const { db, doc, updateDoc, arrayUnion } = window.firebaseData; await updateDoc(doc(db, "sessions", this.pairing.sessionId), { lines: arrayUnion(item) }); },
             
+            // Updated Clear Canvas logic
             clearCanvas() {
+                this.currentPath = []; // Ensure current pending path is cleared
                 if (this.mode === 'color') {
                     this.redoStack = [];
                     this.localActionIds = [];
@@ -1718,7 +1731,7 @@
                     this.normalModeLines = [];
                     localStorage.removeItem('universal_draw_normal_lines');
                 }
-                this.redraw();
+                this.redraw(); // Force clean wipe
                 if (this.pairing.isPaired) {
                     const { db, doc, updateDoc } = window.firebaseData;
                     this.remoteProcessedLines = 0; 
@@ -1808,23 +1821,30 @@
                     const storageRef = sRef(storage, storagePath);
                     // Added metadata to prevent 0% freeze issue with missing content-type
                     const metadata = { contentType: file.type };
-                    const uploadTask = uploadBytesResumable(storageRef, file, metadata);
                     
-                    uploadTask.on('state_changed',
+                    // Assign to this.currentUploadTask to enable cancellation
+                    this.currentUploadTask = uploadBytesResumable(storageRef, file, metadata);
+                    
+                    this.currentUploadTask.on('state_changed',
                         (snapshot) => {
                             if (snapshot.totalBytes > 0) {
                                 this.uploadProgress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                                console.log('Upload is ' + this.uploadProgress + '% done');
                             }
                         },
                         (error) => {
-                            console.error("Story upload error:", error);
-                            this.showToast("فشل رفع القصة: " + error.message, "fas fa-times-circle");
+                            // Check for cancellation specific error
+                            if (error.code === 'storage/canceled') {
+                                this.showToast("تم إلغاء الرفع", "fas fa-ban");
+                            } else {
+                                console.error("Story upload error:", error);
+                                this.showToast("فشل رفع القصة: " + error.message, "fas fa-times-circle");
+                            }
                             this.isUploadingStory = false;
+                            this.currentUploadTask = null;
                         },
                         async () => {
                             try {
-                                const url = await getDownloadURL(uploadTask.snapshot.ref);
+                                const url = await getDownloadURL(this.currentUploadTask.snapshot.ref);
                                 await addDoc(collection(db, "stories"), {
                                     userId: this.user.uid,
                                     userName: this.userData.name,
@@ -1842,6 +1862,7 @@
                             } finally {
                                 this.isUploadingStory = false;
                                 this.uploadProgress = 0;
+                                this.currentUploadTask = null;
                             }
                         }
                     );
@@ -1852,6 +1873,14 @@
                 }
                 
                 e.target.value = '';
+            },
+
+            cancelUpload() {
+                if (this.currentUploadTask) {
+                    this.currentUploadTask.cancel();
+                    this.currentUploadTask = null;
+                    this.isUploadingStory = false;
+                }
             },
             
             getMyStoryStatusClass() {
