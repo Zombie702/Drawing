@@ -1213,6 +1213,10 @@
             }
         },
         mounted() {
+            // Set initial state for history
+            history.replaceState({ view: 'home' }, '');
+            window.addEventListener('popstate', this.handleBackNavigation);
+
             const savedLines = localStorage.getItem('universal_draw_normal_lines');
             if (savedLines) { try { this.normalModeLines = JSON.parse(savedLines); } catch(e) {} }
             
@@ -1222,6 +1226,28 @@
             window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); this.installPrompt = e; });
         },
         methods: {
+            handleBackNavigation(event) {
+                // Priority 1: Dismiss Overlays/Modals
+                if (this.showCommentsSheet) { this.showCommentsSheet = false; return; }
+                if (this.viewingImage) { this.viewingImage = null; return; }
+                if (this.selectedPost) { this.selectedPost = null; return; }
+                if (this.showStoryViewer) { this.closeStoryViewer(true); return; }
+                if (this.showMagicModal) { this.showMagicModal = false; return; }
+                if (this.showSettingsModal) { this.showSettingsModal = false; return; }
+                if (this.showFriendModal) { this.showFriendModal = false; return; }
+                if (this.showPairingModal) { this.showPairingModal = false; return; }
+                if (this.showSessionSetupModal) { this.showSessionSetupModal = false; return; }
+                if (this.showSendTypeModal) { this.showSendTypeModal = false; return; }
+                if (this.confirmModal.show) { this.confirmModal.show = false; return; }
+                
+                // Priority 2: Standard Navigation (Views)
+                if (event.state && event.state.view) {
+                    this.currentView = event.state.view;
+                } else if (this.currentView !== 'home') {
+                    this.currentView = 'home';
+                }
+            },
+
             handleResize() {
                 const canvas = this.$refs.canvas;
                 if (!canvas) return;
@@ -1251,6 +1277,8 @@
             },
             
             switchView(view) { 
+                if (this.currentView === view) return;
+                history.pushState({ view: view }, '', '');
                 this.currentView = view; 
                 if (view === 'canvas') {
                     this.$nextTick(() => { 
@@ -1354,9 +1382,10 @@
                     }
                 });
             },
-            openPairingModal() { this.fetchOtherUsers(); this.showPairingModal = true; },
+            openPairingModal() { this.fetchOtherUsers(); history.pushState({ modal: 'pairing' }, ''); this.showPairingModal = true; },
             
             openSessionSetup(friend) {
+                history.pushState({ modal: 'session' }, '');
                 this.setupParams = { 
                     targetFriend: friend, 
                     enableTimer: false, 
@@ -2094,13 +2123,15 @@
             },
             
             openStoryViewer() {
+                history.pushState({ modal: 'story' }, '');
                 this.currentStoryIndex = 0;
                 this.storyProgress = 0;
                 this.showStoryViewer = true;
                 this.startStoryTimer();
             },
             
-            closeStoryViewer() {
+            closeStoryViewer(skipBack = false) {
+                if (!skipBack) history.back(); // Sync history if closed by UI
                 this.showStoryViewer = false;
                 this.activeStoryUser = null;
                 clearInterval(this.storyInterval);
@@ -2236,7 +2267,11 @@
                 });
             },
 
-            viewImage(url, name) { this.viewingImage = url; this.viewingName = name; },
+            viewImage(url, name) { 
+                history.pushState({ modal: 'image' }, '');
+                this.viewingImage = url; 
+                this.viewingName = name; 
+            },
             formatDateHeader(dateStr) { const date = new Date(dateStr); const today = new Date(); const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1); if (date.toDateString() === today.toDateString()) return "اليوم"; if (date.toDateString() === yesterday.toDateString()) return "أمس"; return date.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' }); },
             showToast(msg, icon = 'fas fa-check-circle') { this.toast = { show: true, message: msg, icon: icon }; setTimeout(() => { this.toast.show = false; }, 3000); },
             showConfirm(title, msg, icon, action) { this.confirmModal = { show: true, title, message: msg, icon, action: () => { action(); this.confirmModal.show = false; } }; },
@@ -2257,20 +2292,33 @@
             logout() { window.firebaseData.signOut(window.firebaseData.auth); this.isAppLocked = false; },
             async fetchOtherUsers() { const { onSnapshot, collection } = window.firebaseData; onSnapshot(collection(window.firebaseData.db, "users"), (snap) => { const unique = new Set(); this.onlineUsers = []; snap.forEach(doc => { const d = doc.data(); if (doc.id !== this.user.uid && !unique.has(d.name)) { unique.add(d.name); this.onlineUsers.push({ id: doc.id, ...d }); } }); }); },
             openAdminPanel() { this.fetchOtherUsers(); this.showAdminModal = true; this.showSidebar = false; this.tempPattern=[]; this.settingMessage='ارسم النقش'; },
-            openSettings() { this.showSidebar = false; this.showSettingsModal = true; this.tempPattern = []; this.currentPattern = []; this.settingMessage = 'ارسم النقش'; setTimeout(() => this.$nextTick(), 100); },
-            closeSettings() { this.showSettingsModal = false; this.currentPattern = []; },
+            openSettings() { 
+                history.pushState({ modal: 'settings' }, '');
+                this.showSidebar = false; 
+                this.showSettingsModal = true; 
+                this.tempPattern = []; 
+                this.currentPattern = []; 
+                this.settingMessage = 'ارسم النقش'; 
+                setTimeout(() => this.$nextTick(), 100); 
+            },
+            closeSettings() { 
+                history.back(); // triggers popstate to close modal
+                // this.showSettingsModal = false; // logic moved to handleBackNavigation
+                this.currentPattern = []; 
+            },
             showUserDetails(u) { this.selectedUser = u; this.showInfoModal = true; },
             handleLockAction(targetUser) { if (targetUser.lockPattern && targetUser.lockPattern.length > 0) { this.resetUserLock(targetUser); } else { this.adminTargetUser = targetUser; this.tempPattern = []; this.currentPattern = []; this.settingMessage = 'ارسم النقش'; this.showAdminSetLockModal = true; setTimeout(() => { this.$nextTick(); }, 100); } },
-            openFriendSelector() { this.fetchOtherUsers(); this.showFriendModal = true; },
+            openFriendSelector() { this.fetchOtherUsers(); history.pushState({ modal: 'friends' }, ''); this.showFriendModal = true; },
             
             // Post Detail Methods
             openPostDetail(post) {
+                history.pushState({ modal: 'post' }, '');
                 this.selectedPost = post;
                 this.showCommentsSheet = false;
             },
             closePostDetail() {
-                this.selectedPost = null;
-                this.showCommentsSheet = false;
+                history.back();
+                // State cleared in handleBackNavigation
             },
 
             // Custom Color Picker Methods
