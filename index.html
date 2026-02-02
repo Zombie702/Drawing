@@ -290,6 +290,21 @@
         </div>
     </transition>
 
+    <!-- Confirm Modal -->
+    <div v-if="confirmModal.show" class="fixed inset-0 z-[8000] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass w-full max-w-sm rounded-3xl p-6 text-center border border-white/10 animate-scale-in">
+            <div class="w-16 h-16 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mx-auto mb-4 text-3xl">
+                <i :class="confirmModal.icon"></i>
+            </div>
+            <h3 class="font-bold text-xl text-white mb-2">{{ confirmModal.title }}</h3>
+            <p class="text-gray-300 mb-6">{{ confirmModal.message }}</p>
+            <div class="flex gap-3">
+                <button @click="confirmModal.show = false" class="flex-1 bg-white/10 text-white py-3 rounded-xl font-bold hover:bg-white/20 transition">إلغاء</button>
+                <button @click="confirmModal.action()" class="flex-1 bg-red-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition">تأكيد</button>
+            </div>
+        </div>
+    </div>
+
     <!-- App Lock Overlay -->
     <div v-if="isAppLocked && user" class="fixed inset-0 z-[5250] bg-[#0f172a] flex flex-col items-center justify-center text-white p-4">
         <div class="mb-4 text-center animate-float"><div class="w-20 h-20 glass rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.3)]"><i class="fas fa-lock text-3xl text-indigo-400"></i></div><h2 class="text-2xl font-bold">التطبيق مقفل</h2></div>
@@ -835,6 +850,21 @@
         </div>
     </transition>
 
+    <!-- Confirm Modal -->
+    <div v-if="confirmModal.show" class="fixed inset-0 z-[8000] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass w-full max-w-sm rounded-3xl p-6 text-center border border-white/10 animate-scale-in">
+            <div class="w-16 h-16 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mx-auto mb-4 text-3xl">
+                <i :class="confirmModal.icon"></i>
+            </div>
+            <h3 class="font-bold text-xl text-white mb-2">{{ confirmModal.title }}</h3>
+            <p class="text-gray-300 mb-6">{{ confirmModal.message }}</p>
+            <div class="flex gap-3">
+                <button @click="confirmModal.show = false" class="flex-1 bg-white/10 text-white py-3 rounded-xl font-bold hover:bg-white/20 transition">إلغاء</button>
+                <button @click="confirmModal.action()" class="flex-1 bg-red-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition">تأكيد</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Send Type Modal -->
     <div v-if="showSendTypeModal" class="fixed inset-0 z-[5500] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
         <div class="glass w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/10">
@@ -987,7 +1017,7 @@
                 // Upload State
                 uploadProgress: 0,
                 isUploadingStory: false,
-                currentUploadTask: null, // Added to store task for cancellation
+                currentUploadXhr: null, // Changed from currentUploadTask to currentUploadXhr for XHR cancellation
             }
         },
         watch: {
@@ -1810,83 +1840,99 @@
                 const file = e.target.files[0];
                 if (!file) return;
                 
-                const type = file.type.startsWith('video') ? 'video' : 'image';
-                const MAX_SIZE_MB = type === 'video' ? 50 : 10;
-                
-                if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-                    this.showToast(`حجم الملف كبير جداً. الحد الأقصى ${MAX_SIZE_MB} ميجابايت`, "fas fa-exclamation-triangle");
+                // ImgBB only supports images. Reject videos if any.
+                if (file.type.startsWith('video/')) {
+                    this.showToast("عذراً، ImgBB لا يدعم الفيديو", "fas fa-video-slash");
+                    e.target.value = '';
                     return;
                 }
                 
                 this.isUploadingStory = true;
                 this.uploadProgress = 0;
                 
-                try {
-                    const { storage, sRef, uploadBytesResumable, getDownloadURL, db, collection, addDoc } = window.firebaseData;
+                // Use FileReader to convert to Base64
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const base64Data = event.target.result.split(',')[1]; // Remove 'data:image/...;base64,' prefix
                     
-                    const storagePath = `stories/${this.user.uid}/${Date.now()}_${file.name}`;
-                    const storageRef = sRef(storage, storagePath);
-                    // Added metadata to prevent 0% freeze issue with missing content-type
-                    const metadata = { contentType: file.type };
+                    const formData = new FormData();
+                    formData.append("image", base64Data);
                     
-                    // Assign to this.currentUploadTask to enable cancellation
-                    this.currentUploadTask = uploadBytesResumable(storageRef, file, metadata);
+                    const xhr = new XMLHttpRequest();
+                    this.currentUploadXhr = xhr;
                     
-                    this.currentUploadTask.on('state_changed',
-                        (snapshot) => {
-                            if (snapshot.totalBytes > 0) {
-                                this.uploadProgress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                            }
-                        },
-                        (error) => {
-                            // Check for cancellation specific error
-                            if (error.code === 'storage/canceled') {
-                                this.showToast("تم إلغاء الرفع", "fas fa-ban");
-                            } else {
-                                console.error("Story upload error:", error);
-                                this.showToast("فشل رفع القصة: " + error.message, "fas fa-times-circle");
-                            }
-                            this.isUploadingStory = false;
-                            this.currentUploadTask = null;
-                        },
-                        async () => {
-                            try {
-                                const url = await getDownloadURL(this.currentUploadTask.snapshot.ref);
-                                await addDoc(collection(db, "stories"), {
-                                    userId: this.user.uid,
-                                    userName: this.userData.name,
-                                    userPhoto: this.userData.photoURL,
-                                    type: type,
-                                    url: url,
-                                    storagePath: storagePath,
-                                    timestamp: Date.now(),
-                                    viewers: []
-                                });
-                                this.showToast("تم نشر القصة بنجاح!", "fas fa-check-circle");
-                            } catch (err) {
-                                console.error("Firestore save error:", err);
-                                this.showToast("فشل حفظ بيانات القصة");
-                            } finally {
-                                this.isUploadingStory = false;
-                                this.uploadProgress = 0;
-                                this.currentUploadTask = null;
-                            }
+                    // Progress
+                    xhr.upload.onprogress = (pe) => {
+                        if (pe.lengthComputable) {
+                            this.uploadProgress = (pe.loaded / pe.total) * 100;
                         }
-                    );
-                } catch (e) {
-                    console.error("Init upload error:", e);
-                    this.showToast("فشل بدء الرفع");
-                    this.isUploadingStory = false;
-                }
+                    };
+                    
+                    // Completion
+                    xhr.onload = async () => {
+                        if (xhr.status === 200) {
+                            try {
+                                const response = JSON.parse(xhr.responseText);
+                                if (response.success) {
+                                    const url = response.data.url;
+                                    // Save to Firestore
+                                    const { db, collection, addDoc } = window.firebaseData;
+                                    await addDoc(collection(db, "stories"), {
+                                        userId: this.user.uid,
+                                        userName: this.userData.name,
+                                        userPhoto: this.userData.photoURL,
+                                        type: 'image', // Always image for ImgBB
+                                        url: url,
+                                        storagePath: null, // No firebase path
+                                        timestamp: Date.now(),
+                                        viewers: []
+                                    });
+                                    this.showToast("تم نشر القصة بنجاح!", "fas fa-check-circle");
+                                } else {
+                                    const errorMsg = response.error ? response.error.message : "Unknown error";
+                                    this.showToast("فشل الرفع: " + errorMsg, "fas fa-times-circle");
+                                }
+                            } catch (err) {
+                                console.error("Story save error:", err);
+                                this.showToast("فشل حفظ القصة");
+                            }
+                        } else {
+                            this.showToast("فشل الاتصال بـ ImgBB (" + xhr.status + ")");
+                        }
+                        this.isUploadingStory = false;
+                        this.currentUploadXhr = null;
+                        this.uploadProgress = 0;
+                    };
+                    
+                    // Error
+                    xhr.onerror = () => {
+                        this.showToast("خطأ في الشبكة أثناء الرفع", "fas fa-wifi");
+                        this.isUploadingStory = false;
+                        this.currentUploadXhr = null;
+                        this.uploadProgress = 0;
+                    };
+                    
+                    // Abort
+                    xhr.onabort = () => {
+                        this.showToast("تم إلغاء الرفع", "fas fa-ban");
+                        this.isUploadingStory = false;
+                        this.currentUploadXhr = null;
+                        this.uploadProgress = 0;
+                    };
+                    
+                    // Send Request
+                    xhr.open("POST", "https://api.imgbb.com/1/upload?key=09a27d6572c192d8c9b066310d5e9186");
+                    xhr.send(formData);
+                };
                 
+                reader.readAsDataURL(file);
                 e.target.value = '';
             },
 
             cancelUpload() {
-                if (this.currentUploadTask) {
-                    this.currentUploadTask.cancel();
-                    this.currentUploadTask = null;
-                    this.isUploadingStory = false;
+                if (this.currentUploadXhr) {
+                    this.currentUploadXhr.abort();
+                    // State cleanup handled in onabort
                 }
             },
             
