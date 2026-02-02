@@ -1104,7 +1104,15 @@
                 this.currentView = view; 
                 if (view === 'canvas') {
                     this.$nextTick(() => { 
-                        if (this.mode === 'draw' && this.normalModeLines.length === 0) {
+                         // Ensure canvas is ready
+                        const canvas = this.$refs.canvas;
+                        if (canvas) {
+                            canvas.width = LOGICAL_WIDTH;
+                            canvas.height = LOGICAL_HEIGHT;
+                        }
+                        
+                        // Robust load
+                        if (this.mode === 'draw' && (!this.normalModeLines || this.normalModeLines.length === 0)) {
                             const saved = localStorage.getItem('universal_draw_normal_lines');
                             if(saved) this.normalModeLines = JSON.parse(saved);
                         }
@@ -1426,8 +1434,7 @@
                             this.ctx.strokeStyle = '#000000'; 
                         } else {
                             this.ctx.globalCompositeOperation = 'source-over';
-                            // Ensure color is visible (not white on white)
-                            this.ctx.strokeStyle = (this.customColor !== '#ffffff' && this.colors && this.colors.indexOf(this.brushColor) === -1 ? this.customColor : this.brushColor);
+                            this.ctx.strokeStyle = this.brushColor;
                         }
                         this.ctx.lineCap = 'round'; 
                         this.ctx.lineJoin = 'round';
