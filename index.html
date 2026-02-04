@@ -308,6 +308,15 @@
     <!-- App Lock Overlay -->
     <div v-if="isAppLocked && user" class="fixed inset-0 z-[5250] bg-[#0f172a] flex flex-col items-center justify-center text-white p-4">
         <div class="mb-4 text-center animate-float"><div class="w-20 h-20 glass rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.3)]"><i class="fas fa-lock text-3xl text-indigo-400"></i></div><h2 class="text-2xl font-bold">التطبيق مقفل</h2></div>
+        
+        <!-- Biometric Hint (if enabled) -->
+        <div v-if="isBiometricEnabled" @click="authenticateBiometric" class="mb-6 flex flex-col items-center justify-center cursor-pointer animate-pulse hover:opacity-80 transition">
+            <div class="w-16 h-16 rounded-full bg-indigo-600/30 flex items-center justify-center mb-2 border border-indigo-500/50">
+                <i class="fas fa-fingerprint text-3xl text-indigo-300"></i>
+            </div>
+            <p class="text-sm text-indigo-300">اضغط للمسح بالبصمة</p>
+        </div>
+
         <div class="pattern-lock-wrapper" @touchstart="startPattern" @touchmove="movePattern" @touchend="endPattern" @mousedown="startPattern" @mousemove="movePattern" @mouseup="endPattern"><canvas ref="lockCanvas" width="280" height="280" class="pattern-canvas"></canvas><div class="dots-container"><div v-for="n in 9" :key="n" class="dot-cell"><div class="dot" :class="{'active': currentPattern.includes(n-1)}"></div></div></div></div>
         <p v-if="lockError" class="text-red-400 font-bold mt-4 animate-pulse">{{ lockError }}</p>
     </div>
@@ -1038,8 +1047,20 @@
             <div class="bg-indigo-600/50 p-4 flex justify-between items-center text-white"><h3 class="font-bold text-lg">الإعدادات</h3><button @click="closeSettings"><i class="fas fa-times"></i></button></div>
             <div class="p-6 space-y-4">
                 <div class="bg-white/5 p-4 rounded-xl border border-white/5"><div v-if="installPrompt"><button @click="installApp" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold">تثبيت التطبيق</button></div><div v-else><p class="text-xs text-gray-400 text-center">التطبيق مثبت أو غير مدعوم</p></div></div>
+                
+                <!-- Biometric Toggle -->
+                <div class="flex items-center justify-between bg-white/5 p-4 rounded-xl border border-white/5">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-fingerprint text-xl text-indigo-400"></i>
+                        <span class="font-bold">فتح بالبصمة</span>
+                    </div>
+                    <button @click="toggleBiometric" class="w-12 h-6 rounded-full relative transition duration-300" :class="isBiometricEnabled ? 'bg-indigo-600' : 'bg-gray-600'">
+                        <div class="w-4 h-4 bg-white rounded-full absolute top-1 transition-all duration-300 shadow-md" :style="{ left: isBiometricEnabled ? 'calc(100% - 1.25rem)' : '0.25rem' }"></div>
+                    </button>
+                </div>
+
                 <div>
-                    <h4 class="font-bold text-white mb-2 text-center">قفل التطبيق</h4>
+                    <h4 class="font-bold text-white mb-2 text-center">قفل التطبيق (النقش)</h4>
                     <div class="bg-black/30 rounded-xl relative mx-auto border border-white/10" style="width: 250px; height: 250px;">
                         <div class="pattern-lock-wrapper" style="width: 100%; height: 100%; margin:0;" @touchstart="startPattern" @touchmove="movePattern" @touchend="endSettingPattern" @mousedown="startPattern" @mousemove="movePattern" @mouseup="endSettingPattern"><canvas ref="settingCanvas" width="250" height="250" class="pattern-canvas"></canvas><div class="dots-container"><div v-for="n in 9" :key="n" class="dot-cell"><div class="dot" :class="{'active': currentPattern.includes(n-1)}"></div></div></div></div>
                     </div>
@@ -1134,6 +1155,7 @@
                 brushColor: '#000000', customColor: '#000000', brushSize: 5, isEraser: false, 
                 uploadedImage: null,
                 isAppLocked: false, currentPattern: [], tempPattern: [], settingMessage: 'ارسم النقش', lockError: '',
+                isBiometricEnabled: false, // New State
                 installPrompt: null, toast: { show: false, message: '', icon: '' }, confirmModal: { show: false, title: '', message: '', icon: '', action: null },
                 showRatingModal: false, tempRating: 3,
                 showTools: true,
@@ -1374,7 +1396,21 @@
                     if (user) {
                         const device = this.getDeviceInfo();
                         updateDoc(doc(db, "users", user.uid), { device: device, lastSeen: Date.now() }).catch(e=>{});
-                        onSnapshot(doc(db, "users", user.uid), (docSnap) => { if (docSnap.exists()) { this.userData = docSnap.data(); if (this.userData.lockPattern && this.userData.lockPattern.length > 0) this.isAppLocked = true; } });
+                        onSnapshot(doc(db, "users", user.uid), (docSnap) => { 
+                            if (docSnap.exists()) { 
+                                this.userData = docSnap.data(); 
+                                if (this.userData.lockPattern && this.userData.lockPattern.length > 0) {
+                                    this.isAppLocked = true; 
+                                    // Check if biometrics is enabled in localStorage
+                                    const bioKey = `bio_enabled_${user.uid}`;
+                                    if (localStorage.getItem(bioKey) === 'true') {
+                                        this.isBiometricEnabled = true;
+                                        // Attempt Unlock
+                                        this.authenticateBiometric();
+                                    }
+                                }
+                            } 
+                        });
                         this.allMessages = [];
                         
                         const q1 = query(collection(db, "messages"), where("receiverId", "==", user.uid));
@@ -1435,6 +1471,74 @@
                     }
                 });
             },
+            
+            // Biometric Authentication Methods
+            async toggleBiometric() {
+                if (this.isBiometricEnabled) {
+                    this.isBiometricEnabled = false;
+                    localStorage.setItem(`bio_enabled_${this.user.uid}`, 'false');
+                } else {
+                    // Enable: Verify support and "register" mock credential to ensure permissions
+                    if (!window.PublicKeyCredential) {
+                        this.showToast("جهازك لا يدعم البصمة", "fas fa-exclamation-triangle");
+                        return;
+                    }
+                    
+                    const challenge = new Uint8Array(32);
+                    window.crypto.getRandomValues(challenge);
+                    
+                    try {
+                        // Create a dummy credential to trigger OS prompt and save permission
+                        await navigator.credentials.create({
+                            publicKey: {
+                                challenge: challenge,
+                                rp: { name: "Universal Drawing" },
+                                user: {
+                                    id: Uint8Array.from(this.user.uid, c => c.charCodeAt(0)),
+                                    name: this.user.email || this.user.uid,
+                                    displayName: this.userData.name
+                                },
+                                pubKeyCredParams: [{alg: -7, type: "public-key"}],
+                                authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                                timeout: 60000,
+                                attestation: "none"
+                            }
+                        });
+                        
+                        this.isBiometricEnabled = true;
+                        localStorage.setItem(`bio_enabled_${this.user.uid}`, 'true');
+                        this.showToast("تم تفعيل البصمة", "fas fa-fingerprint");
+                    } catch(e) {
+                        console.error(e);
+                        this.showToast("فشل تفعيل البصمة", "fas fa-times");
+                    }
+                }
+            },
+            
+            async authenticateBiometric() {
+                if (!window.PublicKeyCredential) return;
+                
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+                
+                try {
+                    await navigator.credentials.get({
+                        publicKey: {
+                            challenge: challenge,
+                            rpId: window.location.hostname,
+                            userVerification: "required",
+                            timeout: 60000
+                        }
+                    });
+                    
+                    this.isAppLocked = false;
+                    this.showToast("تم الفتح بنجاح", "fas fa-unlock");
+                } catch (e) {
+                    console.log("Biometric auth failed or cancelled", e);
+                    // No action needed, fallback to pattern lock which is already visible
+                }
+            },
+
             openPairingModal() { this.fetchOtherUsers(); history.pushState({ modal: 'pairing' }, ''); this.showPairingModal = true; },
             
             openSessionSetup(friend) {
