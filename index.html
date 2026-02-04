@@ -1403,10 +1403,14 @@
                                     this.isAppLocked = true; 
                                     // Check if biometrics is enabled in localStorage
                                     const bioKey = `bio_enabled_${user.uid}`;
-                                    if (localStorage.getItem(bioKey) === 'true') {
+                                    const credId = localStorage.getItem(`bio_cred_id_${user.uid}`);
+                                    
+                                    if (localStorage.getItem(bioKey) === 'true' && credId) {
                                         this.isBiometricEnabled = true;
                                         // Attempt Unlock
                                         this.authenticateBiometric();
+                                    } else {
+                                        this.isBiometricEnabled = false;
                                     }
                                 }
                             } 
@@ -1472,45 +1476,69 @@
                 });
             },
             
-            // Biometric Authentication Methods
+            // --- BIOMETRIC / WEBAUTHN HELPERS ---
+            bufferToBase64url(buffer) {
+                const bytes = new Uint8Array(buffer);
+                let binary = '';
+                for (let i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+            },
+            
+            base64urlToBuffer(base64url) {
+                const padding = '='.repeat((4 - base64url.length % 4) % 4);
+                const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/');
+                const binary = atob(base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                return bytes.buffer;
+            },
+            // -------------------------------------
+
             async toggleBiometric() {
                 if (this.isBiometricEnabled) {
                     this.isBiometricEnabled = false;
-                    localStorage.setItem(`bio_enabled_${this.user.uid}`, 'false');
+                    localStorage.removeItem(`bio_enabled_${this.user.uid}`);
+                    localStorage.removeItem(`bio_cred_id_${this.user.uid}`);
                 } else {
-                    // Enable: Verify support and "register" mock credential to ensure permissions
                     if (!window.PublicKeyCredential) {
                         this.showToast("جهازك لا يدعم البصمة", "fas fa-exclamation-triangle");
                         return;
                     }
                     
-                    const challenge = new Uint8Array(32);
-                    window.crypto.getRandomValues(challenge);
-                    
                     try {
-                        // Create a dummy credential to trigger OS prompt and save permission
-                        await navigator.credentials.create({
-                            publicKey: {
-                                challenge: challenge,
-                                rp: { name: "Universal Drawing" },
-                                user: {
-                                    id: Uint8Array.from(this.user.uid, c => c.charCodeAt(0)),
-                                    name: this.user.email || this.user.uid,
-                                    displayName: this.userData.name
-                                },
-                                pubKeyCredParams: [{alg: -7, type: "public-key"}],
-                                authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
-                                timeout: 60000,
-                                attestation: "none"
-                            }
-                        });
+                        const challenge = new Uint8Array(32);
+                        window.crypto.getRandomValues(challenge);
+                        
+                        const publicKey = {
+                            challenge: challenge,
+                            rp: { name: "Universal Drawing", id: window.location.hostname },
+                            user: {
+                                id: Uint8Array.from(this.user.uid, c => c.charCodeAt(0)),
+                                name: this.user.email || this.user.uid,
+                                displayName: this.userData.name
+                            },
+                            pubKeyCredParams: [{alg: -7, type: "public-key"}, {alg: -257, type: "public-key"}],
+                            authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                            timeout: 60000,
+                            attestation: "none"
+                        };
+                        
+                        const credential = await navigator.credentials.create({ publicKey });
+                        
+                        // Store the credential ID safely
+                        const credId = this.bufferToBase64url(credential.rawId);
+                        localStorage.setItem(`bio_cred_id_${this.user.uid}`, credId);
+                        localStorage.setItem(`bio_enabled_${this.user.uid}`, 'true');
                         
                         this.isBiometricEnabled = true;
-                        localStorage.setItem(`bio_enabled_${this.user.uid}`, 'true');
-                        this.showToast("تم تفعيل البصمة", "fas fa-fingerprint");
+                        this.showToast("تم تفعيل البصمة بنجاح", "fas fa-fingerprint");
                     } catch(e) {
-                        console.error(e);
-                        this.showToast("فشل تفعيل البصمة", "fas fa-times");
+                        console.error("Biometric registration failed:", e);
+                        this.showToast("فشل التفعيل: " + (e.message || "Unknown error"), "fas fa-times");
                     }
                 }
             },
@@ -1518,24 +1546,38 @@
             async authenticateBiometric() {
                 if (!window.PublicKeyCredential) return;
                 
+                const storedId = localStorage.getItem(`bio_cred_id_${this.user.uid}`);
+                if (!storedId) {
+                    // No credential stored, fallback to pattern
+                    this.isBiometricEnabled = false;
+                    return;
+                }
+
                 const challenge = new Uint8Array(32);
                 window.crypto.getRandomValues(challenge);
                 
                 try {
-                    await navigator.credentials.get({
-                        publicKey: {
-                            challenge: challenge,
-                            rpId: window.location.hostname,
-                            userVerification: "required",
-                            timeout: 60000
-                        }
-                    });
+                    const publicKey = {
+                        challenge: challenge,
+                        rpId: window.location.hostname,
+                        allowCredentials: [{
+                            type: "public-key",
+                            id: this.base64urlToBuffer(storedId),
+                            transports: ["internal"]
+                        }],
+                        userVerification: "required",
+                        timeout: 60000
+                    };
                     
-                    this.isAppLocked = false;
-                    this.showToast("تم الفتح بنجاح", "fas fa-unlock");
+                    const assertion = await navigator.credentials.get({ publicKey });
+                    
+                    if (assertion) {
+                        this.isAppLocked = false;
+                        this.showToast("تم الفتح بنجاح", "fas fa-unlock");
+                    }
                 } catch (e) {
-                    console.log("Biometric auth failed or cancelled", e);
-                    // No action needed, fallback to pattern lock which is already visible
+                    console.log("Biometric auth failed/cancelled", e);
+                    // Do nothing - Pattern lock is already visible as fallback
                 }
             },
 
